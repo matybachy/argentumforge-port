@@ -15,7 +15,6 @@ import net.minecraft.util.EnumWorldBlockLayer;
 import net.minecraft.world.World;
 
 import java.util.List;
-import java.util.Locale;
 
 public final class TerrainTextureAtlas implements TextureLookup {
     private static final TerrainTextureAtlas INSTANCE = new TerrainTextureAtlas();
@@ -48,8 +47,8 @@ public final class TerrainTextureAtlas implements TextureLookup {
 
         float spanU = sprite.getMaxU() - sprite.getMinU();
         float spanV = sprite.getMaxV() - sprite.getMinV();
-        float epsilonU = spanU / 256.0f;
-        float epsilonV = spanV / 256.0f;
+        float epsilonU = MeshMath.uvInset(sprite.getMinU(), sprite.getMaxU());
+        float epsilonV = MeshMath.uvInset(sprite.getMinV(), sprite.getMaxV());
 
         int color = state.getBlock().colorMultiplier(world, pos, 0);
         float r = ((color >> 16) & 0xFF) / 255.0f;
@@ -135,19 +134,14 @@ public final class TerrainTextureAtlas implements TextureLookup {
             }
             return dispatcher.getBlockModelShapes().getTexture(state);
         } catch (Throwable ignored) {
-            return fallbackSprite(state.getBlock());
+            return fallbackSprite();
         }
     }
 
-    private TextureAtlasSprite fallbackSprite(Block block) {
-        if (block == null) return null;
+    private TextureAtlasSprite fallbackSprite() {
         Minecraft mc = Minecraft.getMinecraft();
         if (mc == null || mc.getTextureMapBlocks() == null) return null;
-        String name = block.getUnlocalizedName();
-        if (name == null) return mc.getTextureMapBlocks().getMissingSprite();
-        String normalized = name.toLowerCase(Locale.ROOT).replace("tile.", "");
-        TextureAtlasSprite sprite = mc.getTextureMapBlocks().getAtlasSprite("minecraft:blocks/" + normalized);
-        return sprite != null ? sprite : mc.getTextureMapBlocks().getMissingSprite();
+        return mc.getTextureMapBlocks().getMissingSprite();
     }
 
     public static final class FaceUV {
