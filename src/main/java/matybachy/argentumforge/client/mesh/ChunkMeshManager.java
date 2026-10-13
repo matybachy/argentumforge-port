@@ -6,6 +6,7 @@ import net.minecraft.util.MathHelper;
 import net.minecraft.world.World;
 
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.Map;
 
 /**
@@ -14,6 +15,7 @@ import java.util.Map;
 public final class ChunkMeshManager {
     private final Minecraft mc = Minecraft.getMinecraft();
     private final Map<Long, ChunkMesh> meshes = new HashMap<Long, ChunkMesh>();
+    private final SimpleFrustumCuller culler = new SimpleFrustumCuller(8);
     private boolean enabled = false;
 
     public void setEnabled(boolean enabled) {
@@ -58,9 +60,19 @@ public final class ChunkMeshManager {
 
         GLState.pushMatrix();
         GLState.translate(-px, -py, -pz);
-        for (ChunkMesh mesh : meshes.values()) {
-            mesh.render();
+
+        Iterator<Map.Entry<Long, ChunkMesh>> it = meshes.entrySet().iterator();
+        while (it.hasNext()) {
+            Map.Entry<Long, ChunkMesh> entry = it.next();
+            long key = entry.getKey();
+            int chunkX = (int) (key >> 32);
+            int chunkZ = (int) key;
+            if (!culler.shouldRenderChunk(view, chunkX, chunkZ)) {
+                continue;
+            }
+            entry.getValue().render();
         }
+
         GLState.popMatrix();
     }
 
