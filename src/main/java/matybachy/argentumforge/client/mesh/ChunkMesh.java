@@ -3,13 +3,14 @@ package matybachy.argentumforge.client.mesh;
 import net.minecraft.world.World;
 
 /**
- * A lightweight chunk mesh that holds a VBO for a simple mesh representation.
- * This prototype builds a simple face mesh; future work will add UVs, lighting and per-layer rendering.
+ * A chunk mesh containing separate solid and translucent VBOs.
+ * This is the next incremental step toward a real terrain renderer while still preserving a simple compatibility layer.
  */
 public final class ChunkMesh {
     private final int chunkX;
     private final int chunkZ;
-    private final GlVbo vbo = new GlVbo();
+    private final GlVbo solidVbo = new GlVbo();
+    private final GlVbo translucentVbo = new GlVbo();
     private final BlockFaceMesher mesher = new BlockFaceMesher();
     private boolean built = false;
 
@@ -19,18 +20,25 @@ public final class ChunkMesh {
     }
 
     public void build(World world) {
-        float[] verts = mesher.buildChunkMesh(world, chunkX, chunkZ);
-        vbo.upload(verts);
+        BlockFaceMesher.MeshData data = mesher.buildChunkMesh(world, chunkX, chunkZ);
+        solidVbo.upload(data.getSolidVertices());
+        translucentVbo.upload(data.getTranslucentVertices());
         built = true;
     }
 
     public void render() {
         if (!built) return;
-        vbo.draw();
+
+        // render solid first
+        solidVbo.draw();
+
+        // render translucent second (simple alpha overlay)
+        translucentVbo.draw();
     }
 
     public void dispose() {
-        vbo.delete();
+        solidVbo.delete();
+        translucentVbo.delete();
         built = false;
     }
 }

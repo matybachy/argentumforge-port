@@ -7,12 +7,14 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * A minimal block-face mesher used to replace the heightmap prototype.
- * It emits visible faces for blocks in a chunk using simple color vertices.
+ * A more realistic chunk mesher for the prototype stage.
+ * It separates geometry into solid and translucent layers, which is the minimum required for correct terrain rendering.
  */
 public final class BlockFaceMesher {
-    public float[] buildChunkMesh(World world, int chunkX, int chunkZ) {
-        List<Float> verts = new ArrayList<Float>();
+    public MeshData buildChunkMesh(World world, int chunkX, int chunkZ) {
+        List<Float> solid = new ArrayList<Float>();
+        List<Float> translucent = new ArrayList<Float>();
+
         int baseX = chunkX << 4;
         int baseZ = chunkZ << 4;
 
@@ -26,21 +28,20 @@ public final class BlockFaceMesher {
                     Block block = world.getBlock(wx, wy, wz);
                     if (block == null) continue;
 
-                    if (isFaceVisible(world, wx + 1, wy, wz)) emitFace(verts, wx + 1, wy, wz, -1, 0, 0, block);
-                    if (isFaceVisible(world, wx - 1, wy, wz)) emitFace(verts, wx, wy, wz, 1, 0, 0, block);
-                    if (isFaceVisible(world, wx, wy + 1, wz)) emitFace(verts, wx, wy + 1, wz, 0, -1, 0, block);
-                    if (isFaceVisible(world, wx, wy - 1, wz)) emitFace(verts, wx, wy, wz, 0, 1, 0, block);
-                    if (isFaceVisible(world, wx, wy, wz + 1)) emitFace(verts, wx, wy, wz + 1, 0, 0, -1, block);
-                    if (isFaceVisible(world, wx, wy, wz - 1)) emitFace(verts, wx, wy, wz, 0, 0, 1, block);
+                    boolean transparent = block.getMaterial().isLiquid() || block.getMaterial().isReplaceable();
+                    List<Float> target = transparent ? translucent : solid;
+
+                    if (isFaceVisible(world, wx + 1, wy, wz)) emitFace(target, wx + 1, wy, wz, -1, 0, 0, block, transparent);
+                    if (isFaceVisible(world, wx - 1, wy, wz)) emitFace(target, wx, wy, wz, 1, 0, 0, block, transparent);
+                    if (isFaceVisible(world, wx, wy + 1, wz)) emitFace(target, wx, wy + 1, wz, 0, -1, 0, block, transparent);
+                    if (isFaceVisible(world, wx, wy - 1, wz)) emitFace(target, wx, wy, wz, 0, 1, 0, block, transparent);
+                    if (isFaceVisible(world, wx, wy, wz + 1)) emitFace(target, wx, wy, wz + 1, 0, 0, -1, block, transparent);
+                    if (isFaceVisible(world, wx, wy, wz - 1)) emitFace(target, wx, wy, wz, 0, 0, 1, block, transparent);
                 }
             }
         }
 
-        float[] out = new float[verts.size()];
-        for (int i = 0; i < verts.size(); i++) {
-            out[i] = verts.get(i);
-        }
-        return out;
+        return new MeshData(toFloatArray(solid), toFloatArray(translucent));
     }
 
     private boolean isFaceVisible(World world, int nx, int ny, int nz) {
@@ -48,11 +49,11 @@ public final class BlockFaceMesher {
         return world.isAirBlock(nx, ny, nz);
     }
 
-    private void emitFace(List<Float> verts, int px, int py, int pz, int nx, int ny, int nz, Block block) {
-        float r = block.getMaterial().isLiquid() ? 0.2f : 0.6f;
-        float g = block.getMaterial().isSolid() ? 0.8f : 0.4f;
+    private void emitFace(List<Float> verts, int px, int py, int pz, int nx, int ny, int nz, Block block, boolean transparent) {
+        float r = transparent ? 0.2f : 0.6f;
+        float g = transparent ? 0.4f : 0.8f;
         float b = 0.4f + (Math.abs(block.hashCode()) % 100) / 250.0f;
-        float a = 1.0f;
+        float a = transparent ? 0.7f : 1.0f;
 
         float x0 = px - (nx == 1 ? 1 : 0);
         float x1 = x0 + 1.0f;
@@ -78,5 +79,32 @@ public final class BlockFaceMesher {
         verts.add(g);
         verts.add(b);
         verts.add(a);
+    }
+
+    private float[] toFloatArray(List<Float> values) {
+        if (values.isEmpty()) return new float[0];
+        float[] out = new float[values.size()];
+        for (int i = 0; i < values.size(); i++) {
+            out[i] = values.get(i);
+        }
+        return out;
+    }
+
+    public static final class MeshData {
+        private final float[] solidVertices;
+        private final float[] translucentVertices;
+
+        public MeshData(float[] solidVertices, float[] translucentVertices) {
+            this.solidVertices = solidVertices;
+            this.translucentVertices = translucentVertices;
+        }
+
+        public float[] getSolidVertices() {
+            return solidVertices;
+        }
+
+        public float[] getTranslucentVertices() {
+            return translucentVertices;
+        }
     }
 }
