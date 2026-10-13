@@ -15,15 +15,19 @@ This repository currently contains an experimental Forge 1.8.9 mod project with 
 - Rebuild queue with priority + per-tick budget: Implemented (distance-prioritized and radius-filtered candidates)
 - Correct opaque/cutout/translucent layering: Implemented
 - Texture atlas / UV mapping (with missing-sprite fallback): Implemented
-- Lighting and AO (lightweight): Implemented (conservative per-vertex approximation)
-- Chunk visibility and frustum culling: Implemented (distance/frustum-lite)
+- Lighting and AO (lightweight): Implemented (conservative per-vertex approximation with emissive full-bright fallback and corner-neighbor AO sampling)
+- Chunk visibility and frustum culling: Implemented (radius + conservative directional backface culling)
 - Chunk/world/block invalidation hooks: Implemented (chunk load/unload, block place/break, multiplace, and chunk-edge spillover)
+- Chunk VBO lifecycle/reuse: Implemented (persistent VBOs with in-place subdata uploads when capacity allows)
 - Entity/item optimization hooks: Implemented (optional no-op + vanilla fallback)
 - Cloud/weather hooks: Implemented (optional no-op + vanilla fallback)
 - Optional post-effect pipeline: Implemented (capability-gated no-op fallback)
 - Configuration/settings: Implemented (Forge config, disabled by default)
 - Compatibility modules: Implemented (texture/lighting/GPU/effects interfaces)
 - Deterministic pure-Java helper tests: Implemented (`MeshMathTest`)
+- Entity/item/particle optimizations: Fallback-only (opt-in hooks exist; no broad replacement enabled by default)
+- Cloud/weather optimization: Fallback-only (opt-in hooks exist; vanilla remains compatibility path)
+- Post-processing pipeline: Fallback-only (capability-gated no-op unless explicitly enabled and supported)
 - Full upstream parity: Blocked by target-platform differences and rendering abstraction gaps
 
 ## Build results
@@ -43,3 +47,4 @@ This repository currently contains an experimental Forge 1.8.9 mod project with 
 - Direct porting would require substantial reimplementation or compatibility shims.
 - Full parity requires iterative, feature-by-feature porting and runtime validation in a real Minecraft client session.
 - Exact vanilla translucent ordering and full vanilla AO parity remain partial and require additional runtime comparison/tuning.
+- Runtime Minecraft visual/performance verification remains unverified in this environment due ForgeGradle host resolution failure.
