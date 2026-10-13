@@ -1,0 +1,13 @@
+{
+  "modid": "argentumforge",
+  "name": "Argentum Forge Port",
+  "description": "Experimental port of Argentum rendering to Forge 1.8.9 (proof-of-concept)",
+  "version": "0.0.1",
+  "mcversion": "1.8.9",
+  "url": "https://github.com/matybachy/argentumforge-port",
+  "authorList": ["matybachy"],
+  "credits": "Port based on QuicksilverMC/Argentum and GTNewHorizons/Celeritas references",
+  "logoFile": "",
+  "screenshots": [],
+  "dependencies": []
+}
