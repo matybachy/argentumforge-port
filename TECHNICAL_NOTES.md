@@ -26,9 +26,13 @@ This repository currently includes:
 - a Forge 1.8.9 mod project skeleton
 - Java 8-compatible Gradle build setup
 - client hook via RenderWorldLastEvent
-- a VBO-based chunk render prototype
-- an early block-face mesher that emits debug geometry
-- a rebuild queue and simple chunk manager to schedule prototype mesh generation
+- a VBO-based chunk renderer with solid/cutout/translucent passes
+- texture-atlas binding (`TextureMap.locationBlocksTexture`) and sprite UV lookup with safe fallback
+- world-light + lightweight AO sampling for per-vertex brightness approximation
+- conservative model fallback geometry (block bounds, crossed quads for plant-like blocks, fluid corner heights)
+- prioritized, bounded chunk rebuild scheduling with world/chunk/block invalidation hooks
+- optional capability-gated effect pipeline hooks that default to no-op fallback
+- compatibility interfaces for texture lookup, lighting, GPU buffers, and optional effects
 
 This is intentionally a staged prototype and not a full Argentu m-equivalent renderer yet.
 
@@ -46,7 +50,16 @@ The current prototype intentionally avoids claiming full terrain correctness. It
 - OpenGL rendering with LWJGL2
 - VBO upload and draw calls
 - camera-relative transforms
-- chunk mesh generation on the client thread
+- chunk mesh generation and bounded rebuild processing on the client thread
+- stable fallback behavior when model/texture resolution is unavailable
+
+## Validation steps
+Runtime validation should be performed in a real 1.8.9 client session:
+1. Enable `enableExperimentalRenderer=true` in the generated config file.
+2. Start client and load a world.
+3. Verify terrain in all three passes (solid/cutout/translucent), including water/glass/leaves.
+4. Place/break blocks near chunk borders and verify dirty rebuilds.
+5. Change dimension and verify mesh disposal/rebuild without stale VBOs.
 
 ## Known blockers
 - Upstream code makes extensive use of custom render abstractions not present in standard Forge 1.8.9.

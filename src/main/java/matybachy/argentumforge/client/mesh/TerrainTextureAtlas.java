@@ -1,98 +1,153 @@
 package matybachy.argentumforge.client.mesh;
 
+import matybachy.argentumforge.client.compat.TextureLookup;
 import net.minecraft.block.Block;
+import net.minecraft.block.state.IBlockState;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.renderer.BlockRendererDispatcher;
+import net.minecraft.client.renderer.block.model.BakedQuad;
+import net.minecraft.client.renderer.block.model.IBakedModel;
+import net.minecraft.client.renderer.texture.TextureAtlasSprite;
+import net.minecraft.client.renderer.texture.TextureMap;
+import net.minecraft.util.BlockPos;
+import net.minecraft.util.EnumFacing;
+import net.minecraft.util.EnumWorldBlockLayer;
+import net.minecraft.world.World;
 
+import java.util.List;
 import java.util.Locale;
 
-/**
- * Lightweight texture atlas and special-block metadata for the terrain prototype.
- * This intentionally uses atlas-style UV ranges and simple classification rather than a full
- * modern texture pipeline, which keeps the implementation compatible with the 1.8.9 client.
- */
-public final class TerrainTextureAtlas {
+public final class TerrainTextureAtlas implements TextureLookup {
+    private static final TerrainTextureAtlas INSTANCE = new TerrainTextureAtlas();
+
     private TerrainTextureAtlas() {
     }
 
-    public static boolean isTransparent(Block block) {
-        if (block == null) return false;
-        String name = block.getUnlocalizedName().toLowerCase(Locale.ROOT);
-        return name.contains("water") || name.contains("lava") || name.contains("glass") || name.contains("ice") || block.getMaterial().isLiquid();
+    public static TerrainTextureAtlas getInstance() {
+        return INSTANCE;
     }
 
-    public static boolean isCutout(Block block) {
-        if (block == null) return false;
-        String name = block.getUnlocalizedName().toLowerCase(Locale.ROOT);
-        return name.contains("leaves") || name.contains("leaf") || name.contains("tallgrass") || name.contains("vine") || name.contains("plant");
+    public static void bindTerrainTextureAtlas() {
+        INSTANCE.bindTerrainAtlas();
     }
 
-    public static float getAlpha(Block block, boolean transparent) {
-        if (transparent) return 0.7f;
-        if (isCutout(block)) return 0.8f;
+    @Override
+    public void bindTerrainAtlas() {
+        Minecraft mc = Minecraft.getMinecraft();
+        if (mc != null && mc.getTextureManager() != null) {
+            mc.getTextureManager().bindTexture(TextureMap.locationBlocksTexture);
+        }
+    }
+
+    @Override
+    public TerrainFaceData resolveFace(World world, BlockPos pos, IBlockState state, EnumFacing face) {
+        TextureAtlasSprite sprite = resolveSprite(world, pos, state, face);
+        if (sprite == null) {
+            return new TerrainFaceData(0.0f, 0.0f, 1.0f, 1.0f, 0.8f, 0.8f, 0.8f);
+        }
+
+        float spanU = sprite.getMaxU() - sprite.getMinU();
+        float spanV = sprite.getMaxV() - sprite.getMinV();
+        float epsilonU = spanU / 256.0f;
+        float epsilonV = spanV / 256.0f;
+
+        int color = state.getBlock().colorMultiplier(world, pos, 0);
+        float r = ((color >> 16) & 0xFF) / 255.0f;
+        float g = ((color >> 8) & 0xFF) / 255.0f;
+        float b = (color & 0xFF) / 255.0f;
+        if (color == -1) {
+            r = g = b = 1.0f;
+        }
+
+        return new TerrainFaceData(
+                sprite.getMinU() + epsilonU,
+                sprite.getMinV() + epsilonV,
+                sprite.getMaxU() - epsilonU,
+                sprite.getMaxV() - epsilonV,
+                r,
+                g,
+                b
+        );
+    }
+
+    @Override
+    public Pass classifyPass(Block block) {
+        if (block == null) return Pass.SOLID;
+        EnumWorldBlockLayer layer = block.getBlockLayer();
+        if (layer == EnumWorldBlockLayer.TRANSLUCENT) return Pass.TRANSLUCENT;
+        if (layer == EnumWorldBlockLayer.CUTOUT || layer == EnumWorldBlockLayer.CUTOUT_MIPPED) return Pass.CUTOUT;
+        return Pass.SOLID;
+    }
+
+    @Override
+    public float getAlpha(Block block, Pass pass) {
+        if (pass == Pass.TRANSLUCENT) return 0.7f;
+        if (pass == Pass.CUTOUT) return 0.95f;
         return 1.0f;
     }
 
-    public static FaceUV getFaceUVs(Block block, int nx, int ny, int nz) {
-        if (block == null) {
-            return new FaceUV(0.0f, 0.0f, 1.0f, 1.0f);
-        }
-
-        String name = block.getUnlocalizedName().toLowerCase(Locale.ROOT);
-
-        if (name.contains("grass")) {
-            return new FaceUV(0.0f, 0.0f, 0.5f, 0.5f);
-        }
-        if (name.contains("dirt") || name.contains("soil")) {
-            return new FaceUV(0.5f, 0.0f, 1.0f, 0.5f);
-        }
-        if (name.contains("stone") || name.contains("rock")) {
-            return new FaceUV(0.0f, 0.5f, 0.5f, 1.0f);
-        }
-        if (name.contains("sand")) {
-            return new FaceUV(0.5f, 0.5f, 1.0f, 1.0f);
-        }
-        if (name.contains("water") || name.contains("lava")) {
-            return new FaceUV(0.25f, 0.25f, 0.75f, 0.75f);
-        }
-        if (name.contains("leaves") || name.contains("leaf")) {
-            return new FaceUV(0.25f, 0.5f, 0.75f, 1.0f);
-        }
-        if (name.contains("glass")) {
-            return new FaceUV(0.75f, 0.0f, 1.0f, 0.5f);
-        }
-
-        return new FaceUV(0.0f, 0.0f, 1.0f, 1.0f);
+    @Override
+    public boolean isEmissive(Block block) {
+        return block != null && block.getLightValue() > 0;
     }
 
-    public static float[] getFaceColor(Block block, boolean transparent) {
-        if (block == null) {
-            return new float[] { 0.5f, 0.5f, 0.5f };
-        }
+    public static boolean isTransparent(Block block) {
+        return INSTANCE.classifyPass(block) == Pass.TRANSLUCENT;
+    }
 
-        String name = block.getUnlocalizedName().toLowerCase(Locale.ROOT);
+    public static boolean isCutout(Block block) {
+        return INSTANCE.classifyPass(block) == Pass.CUTOUT;
+    }
 
-        if (name.contains("grass")) {
-            return transparent ? new float[] { 0.3f, 0.7f, 0.3f } : new float[] { 0.45f, 0.8f, 0.45f };
-        }
-        if (name.contains("dirt") || name.contains("soil")) {
-            return new float[] { 0.5f, 0.35f, 0.2f };
-        }
-        if (name.contains("stone") || name.contains("rock")) {
-            return new float[] { 0.65f, 0.65f, 0.7f };
-        }
-        if (name.contains("sand")) {
-            return new float[] { 0.9f, 0.8f, 0.5f };
-        }
-        if (name.contains("water")) {
-            return new float[] { 0.25f, 0.45f, 0.9f };
-        }
-        if (name.contains("leaves") || name.contains("leaf")) {
-            return new float[] { 0.35f, 0.75f, 0.35f };
-        }
-        if (name.contains("glass")) {
-            return new float[] { 0.8f, 0.9f, 1.0f };
-        }
+    public static FaceUV getFaceUVs(World world, BlockPos pos, IBlockState state, EnumFacing face) {
+        TerrainFaceData faceData = INSTANCE.resolveFace(world, pos, state, face);
+        return new FaceUV(faceData.u0, faceData.v0, faceData.u1, faceData.v1);
+    }
 
-        return transparent ? new float[] { 0.7f, 0.7f, 0.7f } : new float[] { 0.8f, 0.8f, 0.8f };
+    public static float[] getFaceColor(World world, BlockPos pos, IBlockState state, boolean fallback) {
+        TerrainFaceData faceData = INSTANCE.resolveFace(world, pos, state, EnumFacing.UP);
+        if (fallback && (faceData.r + faceData.g + faceData.b) < 0.15f) {
+            return new float[]{0.8f, 0.8f, 0.8f};
+        }
+        return new float[]{faceData.r, faceData.g, faceData.b};
+    }
+
+    public static float getAlpha(Block block, boolean transparent) {
+        return INSTANCE.getAlpha(block, transparent ? Pass.TRANSLUCENT : Pass.SOLID);
+    }
+
+    private TextureAtlasSprite resolveSprite(World world, BlockPos pos, IBlockState state, EnumFacing face) {
+        if (state == null || state.getBlock() == null) return null;
+        Minecraft mc = Minecraft.getMinecraft();
+        if (mc == null) return null;
+        try {
+            BlockRendererDispatcher dispatcher = mc.getBlockRendererDispatcher();
+            IBakedModel model = dispatcher.getModelFromBlockState(state, world, pos);
+            if (model != null) {
+                List<BakedQuad> faceQuads = model.getFaceQuads(face);
+                if (!faceQuads.isEmpty() && faceQuads.get(0).getSprite() != null) {
+                    return faceQuads.get(0).getSprite();
+                }
+                List<BakedQuad> generalQuads = model.getGeneralQuads();
+                if (!generalQuads.isEmpty() && generalQuads.get(0).getSprite() != null) {
+                    return generalQuads.get(0).getSprite();
+                }
+            }
+            return dispatcher.getBlockModelShapes().getTexture(state);
+        } catch (Throwable ignored) {
+            return fallbackSprite(state.getBlock());
+        }
+    }
+
+    private TextureAtlasSprite fallbackSprite(Block block) {
+        if (block == null) return null;
+        Minecraft mc = Minecraft.getMinecraft();
+        if (mc == null || mc.getTextureMapBlocks() == null) return null;
+        String name = block.getUnlocalizedName();
+        if (name == null) return mc.getTextureMapBlocks().getMissingSprite();
+        String normalized = name.toLowerCase(Locale.ROOT).replace("tile.", "");
+        TextureAtlasSprite sprite = mc.getTextureMapBlocks().getAtlasSprite("minecraft:blocks/" + normalized);
+        return sprite != null ? sprite : mc.getTextureMapBlocks().getMissingSprite();
     }
 
     public static final class FaceUV {

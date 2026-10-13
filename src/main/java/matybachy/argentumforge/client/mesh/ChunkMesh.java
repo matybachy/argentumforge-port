@@ -1,14 +1,15 @@
 package matybachy.argentumforge.client.mesh;
 
+import matybachy.argentumforge.client.compat.GpuBuffer;
 import net.minecraft.world.World;
 
 /** Chunk mesh containing opaque, alpha-tested cutout, and blended translucent VBOs. */
 public final class ChunkMesh {
     private final int chunkX;
     private final int chunkZ;
-    private final GlVbo solidVbo = new GlVbo();
-    private final GlVbo cutoutVbo = new GlVbo();
-    private final GlVbo translucentVbo = new GlVbo();
+    private final GpuBuffer solidVbo = new GlVbo();
+    private final GpuBuffer cutoutVbo = new GlVbo();
+    private final GpuBuffer translucentVbo = new GlVbo();
     private final BlockFaceMesher mesher = new BlockFaceMesher();
     private boolean built;
 

@@ -6,8 +6,11 @@ Current scope
 - Forge 1.8.9 / Java 8 / LWJGL 2 target
 - Independent mod ID: `argentumforge`
 - Client render hook active: `RenderWorldLastEvent`
-- Chunk-render prototype in progress: mesh generation and VBO upload path added
-- Vanilla fallback preserved; experimental renderer is toggled by code and can be disabled
+- Chunk renderer prototype with solid/cutout/translucent passes and chunk lifecycle hooks
+- Terrain atlas binding via `TextureMap.locationBlocksTexture` with safe sprite fallback
+- World-light sampling + lightweight AO approximation for face/vertex shading
+- Conservative non-cubic fallback geometry (block bounds + crossed quads + fluid heights)
+- Vanilla fallback preserved; experimental renderer is disabled by default and config-driven
 
 Repository status
 - This repo is a working prototype, not the complete upstream Argentum feature set.
@@ -20,10 +23,18 @@ Build
   - ./gradlew clean build --stacktrace --no-daemon
   - or on Windows: .\gradlew.bat clean build --stacktrace --no-daemon
 
+Configuration
+- Generated config file controls renderer behavior:
+  - `enableExperimentalRenderer` (default: false)
+  - `renderChunkRadius`
+  - `rebuildBudgetPerTick`
+  - `enableLightingAo`, `enableTransparency`, `enableModelFallback`
+  - optional guarded hooks: `enableOptionalEffects`, `enableEntityHooks`, `enableWeatherHooks`, `enableCloudHooks`
+
 Known limits
-- This is not a complete port of the upstream Argentum renderer.
-- The current terrain prototype is a proof of concept for the Forge 1.8.9 rendering pipeline.
-- Real block-face meshing, lighting, AO, texture mapping, and per-layer renders remain under active development.
-- The experimental renderer is intended to be disabled by default unless specifically enabled for a runtime test.
+- This is not full upstream Argentum parity.
+- Lighting/AO and model support are conservative Forge 1.8.9 approximations.
+- Optional effects/entity/weather/cloud hooks currently default to vanilla/no-op fallback.
+- The experimental renderer is disabled by default unless explicitly enabled for runtime validation.
 
 This repository is intended as a private development workspace for a Forge 1.8.9 rendering port, not a public distribution.
