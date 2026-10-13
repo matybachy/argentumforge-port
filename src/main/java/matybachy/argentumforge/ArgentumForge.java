@@ -13,6 +13,7 @@ public class ArgentumForge {
     public static final String NAME = "Argentum Forge Port";
     public static final String VERSION = "0.0.1";
     public static final ChunkMeshManager MESH_MANAGER = new ChunkMeshManager();
+    public static boolean ENABLE_EXPERIMENTAL_CHUNK_RENDERER = true;
 
     @EventHandler
     public void preInit(FMLPreInitializationEvent event) {

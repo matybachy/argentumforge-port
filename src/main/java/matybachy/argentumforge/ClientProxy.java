@@ -11,12 +11,12 @@ import net.minecraftforge.fml.relauncher.SideOnly;
 @SideOnly(Side.CLIENT)
 public class ClientProxy extends CommonProxy {
     private ArgentumRenderer renderer;
-    private final ChunkMeshManager meshManager = new ChunkMeshManager();
+    private final ChunkMeshManager meshManager = ArgentumForge.MESH_MANAGER;
 
     @Override
     public void preInit() {
         renderer = new ArgentumRenderer();
-        meshManager.setEnabled(true);
+        ArgentumForge.MESH_MANAGER.setEnabled(ArgentumForge.ENABLE_EXPERIMENTAL_CHUNK_RENDERER);
         MinecraftForge.EVENT_BUS.register(this);
     }
 
@@ -33,7 +33,9 @@ public class ClientProxy extends CommonProxy {
     @SubscribeEvent
     public void onClientTick(TickEvent.ClientTickEvent event) {
         if (event.phase == TickEvent.Phase.END) {
-            meshManager.onTick();
+            if (ArgentumForge.ENABLE_EXPERIMENTAL_CHUNK_RENDERER) {
+                meshManager.onTick();
+            }
         }
     }
 
