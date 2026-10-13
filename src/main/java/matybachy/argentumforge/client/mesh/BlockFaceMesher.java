@@ -53,7 +53,7 @@ public final class BlockFaceMesher {
                             : (pass == TextureLookup.Pass.CUTOUT ? cutout : solid);
 
                     if (block.getMaterial().isLiquid()) {
-                        emitFluid(world, target, pos, state, block);
+                        emitFluid(world, target, pos, state, block, pass);
                     } else if (emitModelQuads(world, target, pos, state, block, pass)) {
                         continue;
                     } else if (isCrossModel(block)) {
@@ -195,14 +195,14 @@ public final class BlockFaceMesher {
         quad(vertices, x1, y0, z0, x0, y0, z1, x0, y1, z1, x1, y1, z0, faceData, lightA, alpha);
     }
 
-    private void emitFluid(World world, List<Float> vertices, BlockPos pos, IBlockState state, Block block) {
-        float hNW = fluidCornerHeight(world, pos, -1, -1);
-        float hNE = fluidCornerHeight(world, pos, 1, -1);
-        float hSE = fluidCornerHeight(world, pos, 1, 1);
-        float hSW = fluidCornerHeight(world, pos, -1, 1);
-        TextureLookup.Pass pass = TextureLookup.Pass.TRANSLUCENT;
+    private void emitFluid(World world, List<Float> vertices, BlockPos pos, IBlockState state, Block block, TextureLookup.Pass pass) {
+        Material fluidMaterial = block.getMaterial();
+        float hNW = fluidCornerHeight(world, pos, -1, -1, fluidMaterial);
+        float hNE = fluidCornerHeight(world, pos, 1, -1, fluidMaterial);
+        float hSE = fluidCornerHeight(world, pos, 1, 1, fluidMaterial);
+        float hSW = fluidCornerHeight(world, pos, -1, 1, fluidMaterial);
 
-        if (isFaceVisible(world, pos, block, EnumFacing.UP)) {
+        if (isFluidFaceVisible(world, pos, state, block, EnumFacing.UP, fluidMaterial)) {
             TextureLookup.TerrainFaceData uv = textureLookup.resolveFace(world, pos, state, EnumFacing.UP);
             float[] light = lightingLookup.sampleVertexLight(world, pos, EnumFacing.UP, block, textureLookup.isEmissive(block));
             float a = textureLookup.getAlpha(block, pass);
@@ -213,16 +213,27 @@ public final class BlockFaceMesher {
         }
 
         for (EnumFacing side : EnumFacing.Plane.HORIZONTAL) {
-            if (!isFaceVisible(world, pos, block, side)) continue;
-            emitFluidSide(world, vertices, pos, state, block, side, hNW, hNE, hSE, hSW);
+            if (!isFluidFaceVisible(world, pos, state, block, side, fluidMaterial)) continue;
+            emitFluidSide(world, vertices, pos, state, block, side, pass, hNW, hNE, hSE, hSW);
+        }
+
+        if (isFluidFaceVisible(world, pos, state, block, EnumFacing.DOWN, fluidMaterial)) {
+            TextureLookup.TerrainFaceData uv = textureLookup.resolveFace(world, pos, state, EnumFacing.DOWN);
+            float[] light = lightingLookup.sampleVertexLight(world, pos, EnumFacing.DOWN, block, textureLookup.isEmissive(block));
+            float a = textureLookup.getAlpha(block, pass);
+            float x = pos.getX();
+            float y = pos.getY();
+            float z = pos.getZ();
+            quad(vertices, x, y, z, x + 1.0f, y, z, x + 1.0f, y, z + 1.0f, x, y, z + 1.0f, uv, light, a);
         }
     }
 
     private void emitFluidSide(World world, List<Float> vertices, BlockPos pos, IBlockState state, Block block, EnumFacing side,
+                               TextureLookup.Pass pass,
                                float hNW, float hNE, float hSE, float hSW) {
         TextureLookup.TerrainFaceData uv = textureLookup.resolveFace(world, pos, state, side);
         float[] light = lightingLookup.sampleVertexLight(world, pos, side, block, textureLookup.isEmissive(block));
-        float a = textureLookup.getAlpha(block, TextureLookup.Pass.TRANSLUCENT);
+        float a = textureLookup.getAlpha(block, pass);
         float x = pos.getX();
         float y = pos.getY();
         float z = pos.getZ();
@@ -238,7 +249,7 @@ public final class BlockFaceMesher {
         }
     }
 
-    private float fluidCornerHeight(World world, BlockPos pos, int dx, int dz) {
+    private float fluidCornerHeight(World world, BlockPos pos, int dx, int dz, Material fluidMaterial) {
         int samples = 0;
         float total = 0.0f;
         for (int ox = 0; ox <= 1; ox++) {
@@ -247,11 +258,11 @@ public final class BlockFaceMesher {
                 IBlockState sample = world.getBlockState(samplePos);
                 Block block = sample.getBlock();
                 Block above = world.getBlockState(samplePos.up()).getBlock();
-                if (above != null && above.getMaterial().isLiquid()) {
+                if (isSameFluidMaterial(above, fluidMaterial)) {
                     return 1.0f;
                 }
-                if (block != null && block.getMaterial().isLiquid()) {
-                    int level = getFluidLevel(sample);
+                if (isSameFluidMaterial(block, fluidMaterial)) {
+                    int level = getFluidRenderLevel(sample);
                     total += MeshMath.fluidHeightForLevel(level);
                     samples++;
                 }
@@ -261,11 +272,13 @@ public final class BlockFaceMesher {
         return Math.max(0.1f, MeshMath.clamp01(total / samples));
     }
 
-    private int getFluidLevel(IBlockState state) {
+    private int getFluidRenderLevel(IBlockState state) {
         Block block = state.getBlock();
         if (block instanceof BlockLiquid && state != null) {
             try {
-                return Math.max(0, Math.min(7, block.getMetaFromState(state)));
+                int level = block.getMetaFromState(state);
+                if (level >= 8) level = 0;
+                return Math.max(0, Math.min(7, level));
             } catch (Throwable ignored) {
                 return 0;
             }
@@ -284,9 +297,30 @@ public final class BlockFaceMesher {
         TextureLookup.Pass dstPass = textureLookup.classifyPass(neighbor);
 
         if (srcPass == TextureLookup.Pass.SOLID && dstPass == TextureLookup.Pass.SOLID && neighbor.isOpaqueCube()) return false;
-        if (srcPass == TextureLookup.Pass.TRANSLUCENT && dstPass == TextureLookup.Pass.TRANSLUCENT && source == neighbor) return false;
+        if (srcPass == TextureLookup.Pass.TRANSLUCENT && dstPass == TextureLookup.Pass.TRANSLUCENT) {
+            if (source == neighbor) return false;
+            if (source.getMaterial().isLiquid() && source.getMaterial() == neighbor.getMaterial()) return false;
+        }
         if (srcPass == TextureLookup.Pass.CUTOUT && dstPass == TextureLookup.Pass.CUTOUT && source == neighbor) return false;
         return true;
+    }
+
+    private boolean isFluidFaceVisible(World world, BlockPos pos, IBlockState state, Block source, EnumFacing side, Material fluidMaterial) {
+        BlockPos neighborPos = pos.offset(side);
+        IBlockState neighborState = world.getBlockState(neighborPos);
+        Block neighbor = neighborState.getBlock();
+        if (neighbor == null || neighbor == Blocks.air) return true;
+        if (isSameFluidMaterial(neighbor, fluidMaterial)) {
+            if (side == EnumFacing.UP || side == EnumFacing.DOWN) return false;
+            int sourceLevel = getFluidRenderLevel(state);
+            int neighborLevel = getFluidRenderLevel(neighborState);
+            return neighborLevel > sourceLevel;
+        }
+        return source.shouldSideBeRendered(world, neighborPos, side);
+    }
+
+    private boolean isSameFluidMaterial(Block block, Material material) {
+        return block != null && block.getMaterial().isLiquid() && block.getMaterial() == material;
     }
 
     private void emitFace(World world, List<Float> vertices, BlockPos pos, IBlockState state, Block block, EnumFacing face,

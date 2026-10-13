@@ -30,8 +30,8 @@ This repository currently includes:
 - texture-atlas binding (`TextureMap.locationBlocksTexture`) and baked-model sprite UV lookup with missing-sprite fallback
 - baked-model quad decoding for block geometry, with conservative fallback geometry if model access/decoding fails
 - world-light + lightweight AO sampling for per-vertex brightness approximation
-- conservative model fallback geometry (block bounds, crossed quads for plant-like blocks, fluid corner heights)
-- prioritized, bounded chunk rebuild scheduling with world/chunk/block invalidation hooks
+- conservative model fallback geometry (block bounds, crossed quads for plant-like blocks, fluid corner heights + side/bottom faces)
+- prioritized, bounded chunk rebuild scheduling with world/chunk/block invalidation hooks (including MultiPlace updates and edge-neighbor dirtying)
 - optional capability-gated effect pipeline hooks that default to no-op fallback
 - compatibility interfaces for texture lookup, lighting, GPU buffers, and optional effects
 
@@ -65,7 +65,7 @@ Runtime validation should be performed in a real 1.8.9 client session:
 
 ## Current truth-in-advertising status
 - Implemented: baked-model quad meshing path with safe fallback for unsupported/missing model data.
-- Partially implemented: fluid shape/UV parity and smooth-light/AO parity (current implementation is conservative and stable, not 1:1 vanilla).
+- Partially implemented: fluid shape/UV parity and smooth-light/AO parity (current implementation is conservative and stable, not 1:1 vanilla; same-material liquid internals are now suppressed).
 - Unverified in this execution environment: real in-game visual parity/performance due unavailable runtime client validation here.
 - Platform-blocked: direct parity with upstream Argentum/Celeritas renderer abstractions beyond what Forge 1.8.9 exposes.
 

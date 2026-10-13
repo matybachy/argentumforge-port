@@ -49,7 +49,7 @@ public final class ChunkMeshManager {
     public void markDirty(int chunkX, int chunkZ, int radius) {
         for (int dx = -radius; dx <= radius; dx++) {
             for (int dz = -radius; dz <= radius; dz++) {
-                dirtyChunks.add(key(chunkX + dx, chunkZ + dz));
+                dirtyChunks.add(ChunkCoord.key(chunkX + dx, chunkZ + dz));
             }
         }
     }
@@ -67,7 +67,7 @@ public final class ChunkMeshManager {
 
     public void rebuildChunk(int chunkX, int chunkZ, World world) {
         if (world == null || !world.getChunkProvider().chunkExists(chunkX, chunkZ)) return;
-        long id = key(chunkX, chunkZ);
+        long id = ChunkCoord.key(chunkX, chunkZ);
         ChunkMesh old = meshes.remove(id);
         if (old != null) old.dispose();
 
@@ -87,7 +87,7 @@ public final class ChunkMeshManager {
     }
 
     public void unloadChunk(int chunkX, int chunkZ) {
-        long id = key(chunkX, chunkZ);
+        long id = ChunkCoord.key(chunkX, chunkZ);
         ChunkMesh mesh = meshes.remove(id);
         if (mesh != null) mesh.dispose();
         dirtyChunks.remove(id);
@@ -106,7 +106,8 @@ public final class ChunkMeshManager {
             for (int dz = -activeRadius; dz <= activeRadius; dz++) {
                 int cx = centerX + dx;
                 int cz = centerZ + dz;
-                if (!meshes.containsKey(key(cx, cz))) dirtyChunks.add(key(cx, cz));
+                long key = ChunkCoord.key(cx, cz);
+                if (!meshes.containsKey(key)) dirtyChunks.add(key);
             }
         }
 
@@ -116,13 +117,13 @@ public final class ChunkMeshManager {
             unloadOutside(centerX, centerZ);
         }
 
-        List<Long> sorted = prioritizedDirty(centerX, centerZ);
+        List<Long> sorted = prioritizedDirty(centerX, centerZ, activeRadius + 1);
         int rebuilt = 0;
         int budget = getRebuildBudget();
         for (Long id : sorted) {
             if (rebuilt >= budget) break;
-            int cx = (int) (id >> 32);
-            int cz = (int) id;
+            int cx = ChunkCoord.chunkX(id.longValue());
+            int cz = ChunkCoord.chunkZ(id.longValue());
             if (Math.abs(cx - centerX) <= activeRadius && Math.abs(cz - centerZ) <= activeRadius) {
                 rebuildChunk(cx, cz, world);
                 rebuilt++;
@@ -130,8 +131,15 @@ public final class ChunkMeshManager {
         }
     }
 
-    private List<Long> prioritizedDirty(int centerX, int centerZ) {
-        List<Long> ids = new ArrayList<Long>(dirtyChunks);
+    private List<Long> prioritizedDirty(int centerX, int centerZ, int candidateRadius) {
+        List<Long> ids = new ArrayList<Long>();
+        for (Long id : dirtyChunks) {
+            int cx = ChunkCoord.chunkX(id.longValue());
+            int cz = ChunkCoord.chunkZ(id.longValue());
+            if (ChunkCoord.isWithinRadius(centerX, centerZ, cx, cz, candidateRadius)) {
+                ids.add(id);
+            }
+        }
         Collections.sort(ids, new Comparator<Long>() {
             @Override
             public int compare(Long left, Long right) {
@@ -144,19 +152,15 @@ public final class ChunkMeshManager {
     }
 
     private double distanceSq(long id, int centerX, int centerZ) {
-        int cx = (int) (id >> 32);
-        int cz = (int) (long) id;
-        double dx = cx - centerX;
-        double dz = cz - centerZ;
-        return dx * dx + dz * dz;
+        return ChunkCoord.distanceSq(ChunkCoord.chunkX(id), ChunkCoord.chunkZ(id), centerX, centerZ);
     }
 
     private void unloadOutside(int centerX, int centerZ) {
         int activeRadius = getActiveRadius();
         for (Iterator<Map.Entry<Long, ChunkMesh>> it = meshes.entrySet().iterator(); it.hasNext();) {
             Map.Entry<Long, ChunkMesh> entry = it.next();
-            int cx = (int) (entry.getKey() >> 32);
-            int cz = (int) (long) entry.getKey();
+            int cx = ChunkCoord.chunkX(entry.getKey().longValue());
+            int cz = ChunkCoord.chunkZ(entry.getKey().longValue());
             if (Math.abs(cx - centerX) > activeRadius || Math.abs(cz - centerZ) > activeRadius) {
                 entry.getValue().dispose();
                 it.remove();
@@ -191,15 +195,11 @@ public final class ChunkMeshManager {
     private List<Map.Entry<Long, ChunkMesh>> visibleMeshes(Entity view) {
         List<Map.Entry<Long, ChunkMesh>> result = new ArrayList<Map.Entry<Long, ChunkMesh>>();
         for (Map.Entry<Long, ChunkMesh> entry : meshes.entrySet()) {
-            int cx = (int) (entry.getKey() >> 32);
-            int cz = (int) (long) entry.getKey();
+            int cx = ChunkCoord.chunkX(entry.getKey().longValue());
+            int cz = ChunkCoord.chunkZ(entry.getKey().longValue());
             if (culler.shouldRenderChunk(view, cx, cz)) result.add(entry);
         }
         return result;
-    }
-
-    private long key(int chunkX, int chunkZ) {
-        return (((long) chunkX) << 32) ^ (chunkZ & 0xffffffffL);
     }
 
     public void dispose() {
@@ -227,8 +227,8 @@ public final class ChunkMeshManager {
         }
 
         private double distance(long id) {
-            int cx = (int) (id >> 32);
-            int cz = (int) (long) id;
+            int cx = ChunkCoord.chunkX(id);
+            int cz = ChunkCoord.chunkZ(id);
             double dx = (cx << 4) + 8.0D - viewX;
             double dz = (cz << 4) + 8.0D - viewZ;
             return dx * dx + dz * dz;

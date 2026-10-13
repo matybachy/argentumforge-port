@@ -19,12 +19,12 @@ public final class SimpleFrustumCuller {
             return false;
         }
 
-        int camChunkX = (int) Math.floor(camera.posX / 16.0D);
-        int camChunkZ = (int) Math.floor(camera.posZ / 16.0D);
+        int camChunkX = ChunkCoord.chunkFromBlock(camera.posX);
+        int camChunkZ = ChunkCoord.chunkFromBlock(camera.posZ);
+        return shouldRenderChunk(camChunkX, camChunkZ, chunkX, chunkZ);
+    }
 
-        int dx = chunkX - camChunkX;
-        int dz = chunkZ - camChunkZ;
-        int distanceSq = dx * dx + dz * dz;
-        return distanceSq <= (maxDistanceChunks * maxDistanceChunks);
+    boolean shouldRenderChunk(int cameraChunkX, int cameraChunkZ, int chunkX, int chunkZ) {
+        return ChunkCoord.isWithinRadius(cameraChunkX, cameraChunkZ, chunkX, chunkZ, maxDistanceChunks);
     }
 }
