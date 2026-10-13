@@ -13,8 +13,7 @@ import java.util.Set;
 
 /**
  * Manages ChunkMesh instances for nearby chunks. Builds simple meshes on demand and renders them.
- * This is the next incremental step beyond a static prototype: rebuilds are now tracked as dirty chunks,
- * so the manager can invalidate and rebuild chunks without rebuilding the full radius every tick.
+ * This phase adds block-driven invalidation and neighbor invalidation so nearby chunks are rebuilt when a block change occurs.
  */
 public final class ChunkMeshManager {
     private final Minecraft mc = Minecraft.getMinecraft();
@@ -30,8 +29,16 @@ public final class ChunkMeshManager {
     }
 
     public void markDirty(int chunkX, int chunkZ) {
-        long key = (((long) chunkX) << 32) ^ (chunkZ & 0xffffffffL);
-        dirtyChunks.add(key);
+        markDirty(chunkX, chunkZ, 0);
+    }
+
+    public void markDirty(int chunkX, int chunkZ, int radius) {
+        for (int dx = -radius; dx <= radius; dx++) {
+            for (int dz = -radius; dz <= radius; dz++) {
+                long key = (((long) (chunkX + dx)) << 32) ^ ((chunkZ + dz) & 0xffffffffL);
+                dirtyChunks.add(key);
+            }
+        }
     }
 
     public void rebuildChunk(int chunkX, int chunkZ, World world) {
@@ -51,7 +58,6 @@ public final class ChunkMeshManager {
         int chunkX = px >> 4;
         int chunkZ = pz >> 4;
 
-        // Maintain a small radius, but only rebuild dirty chunks to avoid unnecessary work.
         int radius = 2;
         World world = mc.theWorld;
         for (int dx = -radius; dx <= radius; dx++) {
@@ -84,7 +90,6 @@ public final class ChunkMeshManager {
             long key = it.next();
             int cx = (int) (key >> 32);
             int cz = (int) key;
-            // Only rebuild chunks near the player.
             if (Math.abs(cx - chunkX) <= radius && Math.abs(cz - chunkZ) <= radius) {
                 rebuildChunk(cx, cz, world);
             }

@@ -1,13 +1,11 @@
 package matybachy.argentumforge.client.mesh;
 
-import net.minecraft.block.Block;
 import net.minecraft.client.Minecraft;
 import net.minecraft.util.BlockPos;
 import net.minecraft.world.World;
 
 /**
- * A small utility to keep the prototype terrain renderer aligned with the player's current world coordinates.
- * This is the next iterative step toward proper world-coordinate tracking and rebuild invalidation.
+ * Phase 3 terrain-tracking utility: dirty chunk invalidation follows block updates and spills to neighboring chunks.
  */
 public final class TerrainTracker {
     private final Minecraft mc = Minecraft.getMinecraft();
@@ -29,27 +27,21 @@ public final class TerrainTracker {
         lastPlayerChunkX = playerChunkX;
         lastPlayerChunkZ = playerChunkZ;
 
-        // This is intentionally simple; the next iteration will track block changes more precisely.
+        // Invalidate the active radius to keep the chunk manager in sync with the camera.
         for (int dx = -2; dx <= 2; dx++) {
             for (int dz = -2; dz <= 2; dz++) {
-                int chunkX = playerChunkX + dx;
-                int chunkZ = playerChunkZ + dz;
-                manager.markDirty(chunkX, chunkZ);
+                manager.markDirty(playerChunkX + dx, playerChunkZ + dz);
             }
         }
     }
 
-    public boolean isChunkDirty(int chunkX, int chunkZ) {
-        return false;
-    }
-
-    public void onBlockUpdate(World world, BlockPos pos) {
-        if (world == null || pos == null) {
+    public void onBlockUpdate(World world, BlockPos pos, ChunkMeshManager manager) {
+        if (world == null || pos == null || manager == null) {
             return;
         }
 
         int chunkX = pos.getX() >> 4;
         int chunkZ = pos.getZ() >> 4;
-        // In a more complete implementation, we would invalidate the chunk and neighbors.
+        manager.markDirty(chunkX, chunkZ, 1);
     }
 }
