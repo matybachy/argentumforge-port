@@ -1,6 +1,9 @@
 package matybachy.argentumforge.client.mesh;
 
 import net.minecraft.block.Block;
+import net.minecraft.block.state.IBlockState;
+import net.minecraft.util.BlockPos;
+import net.minecraft.util.EnumFacing;
 import net.minecraft.world.World;
 
 import java.util.ArrayList;
@@ -25,7 +28,7 @@ public final class WaterMesher {
                     if (block == null || !block.getMaterial().isLiquid()) continue;
 
                     if (isWaterSurfaceVisible(world, wx, wy, wz)) {
-                        emitSurface(vertices, wx, wy, wz, block);
+                        emitSurface(world, vertices, wx, wy, wz, world.getBlockState(new BlockPos(wx, wy, wz)), block);
                     }
                 }
             }
@@ -42,9 +45,10 @@ public final class WaterMesher {
         return !above.getMaterial().isLiquid();
     }
 
-    private void emitSurface(List<Float> verts, int x, int y, int z, Block block) {
-        TerrainTextureAtlas.FaceUV uv = TerrainTextureAtlas.getFaceUVs(block, 0, 1, 0);
-        float[] color = TerrainTextureAtlas.getFaceColor(block, true);
+    private void emitSurface(World world, List<Float> verts, int x, int y, int z, IBlockState state, Block block) {
+        BlockPos pos = new BlockPos(x, y, z);
+        TerrainTextureAtlas.FaceUV uv = TerrainTextureAtlas.getFaceUVs(world, pos, state, EnumFacing.UP);
+        float[] color = TerrainTextureAtlas.getFaceColor(world, pos, state, true);
         float alpha = TerrainTextureAtlas.getAlpha(block, true);
 
         float r = clamp(color[0]);

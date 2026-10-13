@@ -1,36 +1,79 @@
 package matybachy.argentumforge.client.mesh;
 
+import matybachy.argentumforge.ArgentumConfig;
+import matybachy.argentumforge.client.compat.LightingLookup;
 import net.minecraft.block.Block;
+import net.minecraft.util.BlockPos;
+import net.minecraft.util.EnumFacing;
 import net.minecraft.world.World;
 
-/**
- * Simple lighting approximation for the terrain prototype.
- * This is intentionally lightweight: it approximates face brightness from a block's light value,
- * the world height, and the direction of the face. This keeps the renderer closer to a real
- * 1.8.9 block-light pipeline without requiring a full modern lightmap implementation.
- */
-public final class TerrainLighting {
+public final class TerrainLighting implements LightingLookup {
+    private static final TerrainLighting INSTANCE = new TerrainLighting();
+
     private TerrainLighting() {
     }
 
-    public static float getFaceLight(World world, int x, int y, int z, int nx, int ny, int nz) {
-        int emitted = 0;
-        if (world != null) {
-            Block block = world.getBlock(x, y, z);
-            if (block != null) {
-                emitted = Math.max(emitted, block.getLightValue());
-            }
-            float heightBias = 1.0f - Math.min(1.0f, (float) y / 128.0f);
-            emitted = Math.max(emitted, (int) (heightBias * 12.0f));
+    public static TerrainLighting getInstance() {
+        return INSTANCE;
+    }
+
+    @Override
+    public float[] sampleVertexLight(World world, BlockPos pos, EnumFacing face, Block block, boolean emissive) {
+        float[] values = new float[] {1.0f, 1.0f, 1.0f, 1.0f};
+        if (!ArgentumConfig.enableLightingAo || world == null || pos == null) return values;
+
+        BlockPos facePos = pos.offset(face);
+        float base = sampleCombined(world, facePos, emissive ? 15 : 0);
+        float ao0 = sampleAo(world, facePos, face, -1, -1);
+        float ao1 = sampleAo(world, facePos, face, 1, -1);
+        float ao2 = sampleAo(world, facePos, face, 1, 1);
+        float ao3 = sampleAo(world, facePos, face, -1, 1);
+        values[0] = clamp(base * ao0);
+        values[1] = clamp(base * ao1);
+        values[2] = clamp(base * ao2);
+        values[3] = clamp(base * ao3);
+        return values;
+    }
+
+    public static float getFaceLight(World world, BlockPos pos, EnumFacing face, Block block, boolean emissive) {
+        return INSTANCE.sampleVertexLight(world, pos, face, block, emissive)[0];
+    }
+
+    private float sampleCombined(World world, BlockPos pos, int minBlockLight) {
+        int combined = world.getCombinedLight(pos, minBlockLight);
+        int sky = (combined >> 20) & 0xF;
+        int block = (combined >> 4) & 0xF;
+        int level = Math.max(sky, block);
+        return 0.2f + (level / 15.0f) * 0.8f;
+    }
+
+    private float sampleAo(World world, BlockPos pos, EnumFacing face, int side, int up) {
+        BlockPos sidePos = offsetForFace(pos, face, side, up);
+        Block sample = world.getBlockState(sidePos).getBlock();
+        if (sample == null) return 1.0f;
+        float ao = sample.getAmbientOcclusionLightValue();
+        if (sample.isOpaqueCube()) ao *= 0.85f;
+        return clamp(ao);
+    }
+
+    private BlockPos offsetForFace(BlockPos pos, EnumFacing face, int side, int up) {
+        switch (face) {
+            case UP:
+            case DOWN:
+                return pos.add(side, 0, up);
+            case NORTH:
+            case SOUTH:
+                return pos.add(side, up, 0);
+            case EAST:
+            case WEST:
+            default:
+                return pos.add(0, up, side);
         }
+    }
 
-        float brightness = 0.35f + ((emitted / 15.0f) * 0.65f);
-        brightness *= 0.90f + (nx != 0 ? 0.08f : 0.0f);
-        brightness *= 0.92f + (ny != 0 ? 0.10f : 0.0f);
-        brightness *= 0.95f + (nz != 0 ? 0.06f : 0.0f);
-
-        if (brightness < 0.2f) brightness = 0.2f;
-        if (brightness > 1.0f) brightness = 1.0f;
-        return brightness;
+    private float clamp(float value) {
+        if (value < 0.0f) return 0.0f;
+        if (value > 1.0f) return 1.0f;
+        return value;
     }
 }

@@ -7,5 +7,6 @@ package matybachy.argentumforge.client.mesh;
  */
 public enum RenderLayer {
     SOLID,
+    CUTOUT,
     TRANSLUCENT
 }

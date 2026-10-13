@@ -1,5 +1,6 @@
 package matybachy.argentumforge.client.mesh;
 
+import matybachy.argentumforge.client.compat.GpuBuffer;
 import org.lwjgl.BufferUtils;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL15;
@@ -7,12 +8,13 @@ import org.lwjgl.opengl.GL15;
 import java.nio.FloatBuffer;
 
 /** LWJGL 2 VBO wrapper for x,y,z,u,v,r,g,b,a vertices. */
-public final class GlVbo {
+public final class GlVbo implements GpuBuffer {
     private static final int FLOATS_PER_VERTEX = 9;
     private static final int BYTES_PER_FLOAT = 4;
     private int vboId;
     private int vertexCount;
 
+    @Override
     public void upload(float[] vertices) {
         delete();
         if (vertices == null || vertices.length == 0) return;
@@ -29,6 +31,7 @@ public final class GlVbo {
         GL15.glBindBuffer(GL15.GL_ARRAY_BUFFER, 0);
     }
 
+    @Override
     public void draw() {
         if (vboId == 0 || vertexCount == 0) return;
         GL15.glBindBuffer(GL15.GL_ARRAY_BUFFER, vboId);
@@ -46,6 +49,7 @@ public final class GlVbo {
         GL15.glBindBuffer(GL15.GL_ARRAY_BUFFER, 0);
     }
 
+    @Override
     public void delete() {
         if (vboId != 0) {
             try {
