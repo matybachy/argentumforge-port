@@ -5,16 +5,16 @@ import matybachy.argentumforge.client.compat.TextureLookup;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockBush;
 import net.minecraft.block.BlockCrops;
-import net.minecraft.block.BlockLadder;
 import net.minecraft.block.BlockLiquid;
-import net.minecraft.block.BlockPane;
-import net.minecraft.block.BlockRailBase;
 import net.minecraft.block.BlockReed;
-import net.minecraft.block.BlockSnow;
 import net.minecraft.block.BlockTorch;
 import net.minecraft.block.BlockVine;
 import net.minecraft.block.material.Material;
 import net.minecraft.block.state.IBlockState;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.renderer.BlockRendererDispatcher;
+import net.minecraft.client.renderer.block.model.BakedQuad;
+import net.minecraft.client.renderer.block.model.IBakedModel;
 import net.minecraft.init.Blocks;
 import net.minecraft.util.BlockPos;
 import net.minecraft.util.EnumFacing;
@@ -54,6 +54,8 @@ public final class BlockFaceMesher {
 
                     if (block.getMaterial().isLiquid()) {
                         emitFluid(world, target, pos, state, block);
+                    } else if (emitModelQuads(world, target, pos, state, block, pass)) {
+                        continue;
                     } else if (isCrossModel(block)) {
                         emitCross(world, target, pos, state, block, pass);
                     } else {
@@ -71,11 +73,81 @@ public final class BlockFaceMesher {
                 || block instanceof BlockCrops
                 || block instanceof BlockReed
                 || block instanceof BlockVine
-                || block instanceof BlockTorch
-                || block instanceof BlockLadder
-                || block instanceof BlockRailBase
-                || block instanceof BlockPane
-                || block instanceof BlockSnow;
+                || block instanceof BlockTorch;
+    }
+
+    private boolean emitModelQuads(World world, List<Float> vertices, BlockPos pos, IBlockState state, Block block, TextureLookup.Pass pass) {
+        Minecraft mc = Minecraft.getMinecraft();
+        if (mc == null) return false;
+        try {
+            BlockRendererDispatcher dispatcher = mc.getBlockRendererDispatcher();
+            if (dispatcher == null) return false;
+            IBakedModel model = dispatcher.getModelFromBlockState(state, world, pos);
+            if (model == null) return false;
+
+            boolean emitted = false;
+            for (EnumFacing face : EnumFacing.values()) {
+                if (!isFaceVisible(world, pos, block, face)) continue;
+                List<BakedQuad> faceQuads = model.getFaceQuads(face);
+                if (faceQuads == null || faceQuads.isEmpty()) continue;
+                for (BakedQuad quad : faceQuads) {
+                    emitted |= emitBakedQuad(world, vertices, pos, state, block, pass, face, quad);
+                }
+            }
+
+            List<BakedQuad> generalQuads = model.getGeneralQuads();
+            if (generalQuads != null && !generalQuads.isEmpty()) {
+                for (BakedQuad quad : generalQuads) {
+                    EnumFacing quadFace = quad != null && quad.getFace() != null ? quad.getFace() : EnumFacing.UP;
+                    emitted |= emitBakedQuad(world, vertices, pos, state, block, pass, quadFace, quad);
+                }
+            }
+            return emitted;
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    private boolean emitBakedQuad(World world, List<Float> vertices, BlockPos pos, IBlockState state, Block block,
+                                  TextureLookup.Pass pass, EnumFacing face, BakedQuad quad) {
+        if (quad == null) return false;
+        int[] data = quad.getVertexData();
+        if (data == null || data.length < 4) return false;
+        int stride = data.length / 4;
+        if (stride < 6) return false;
+
+        float[] light = lightingLookup.sampleVertexLight(world, pos, face, block, textureLookup.isEmissive(block));
+        float alpha = textureLookup.getAlpha(block, pass);
+        float[] tint = resolveTint(world, pos, state, quad);
+
+        int[] order = new int[]{0, 1, 2, 0, 2, 3};
+        for (int i = 0; i < order.length; i++) {
+            int vertexIndex = order[i];
+            int offset = vertexIndex * stride;
+            float x = pos.getX() + Float.intBitsToFloat(data[offset]);
+            float y = pos.getY() + Float.intBitsToFloat(data[offset + 1]);
+            float z = pos.getZ() + Float.intBitsToFloat(data[offset + 2]);
+            float u = Float.intBitsToFloat(data[offset + 4]);
+            float v = Float.intBitsToFloat(data[offset + 5]);
+            pushRaw(vertices, x, y, z, u, v, tint[0] * light[vertexIndex], tint[1] * light[vertexIndex], tint[2] * light[vertexIndex], alpha);
+        }
+        return true;
+    }
+
+    private float[] resolveTint(World world, BlockPos pos, IBlockState state, BakedQuad quad) {
+        if (quad == null || !quad.hasTintIndex()) return new float[]{1.0f, 1.0f, 1.0f};
+        int color;
+        try {
+            color = state.getBlock().colorMultiplier(world, pos, quad.getTintIndex());
+        } catch (Throwable ignored) {
+            color = -1;
+        }
+        if (color == -1) return new float[]{1.0f, 1.0f, 1.0f};
+        return new float[]{
+                ((color >> 16) & 0xFF) / 255.0f,
+                ((color >> 8) & 0xFF) / 255.0f,
+                (color & 0xFF) / 255.0f
+        };
     }
 
     private void emitBox(World world, List<Float> vertices, BlockPos pos, IBlockState state, Block block, TextureLookup.Pass pass) {
@@ -174,15 +246,19 @@ public final class BlockFaceMesher {
                 BlockPos samplePos = pos.add(dx + ox, 0, dz + oz);
                 IBlockState sample = world.getBlockState(samplePos);
                 Block block = sample.getBlock();
+                Block above = world.getBlockState(samplePos.up()).getBlock();
+                if (above != null && above.getMaterial().isLiquid()) {
+                    return 1.0f;
+                }
                 if (block != null && block.getMaterial().isLiquid()) {
                     int level = getFluidLevel(sample);
-                    total += (8 - level) / 8.0f;
+                    total += MeshMath.fluidHeightForLevel(level);
                     samples++;
                 }
             }
         }
         if (samples == 0) return 1.0f;
-        return Math.max(0.1f, Math.min(1.0f, total / samples));
+        return Math.max(0.1f, MeshMath.clamp01(total / samples));
     }
 
     private int getFluidLevel(IBlockState state) {
@@ -266,19 +342,24 @@ public final class BlockFaceMesher {
 
     private void push(List<Float> values, float x, float y, float z, float u, float v,
                       TextureLookup.TerrainFaceData uv, float light, float alpha) {
+        pushRaw(values, x, y, z, u, v, uv.r * light, uv.g * light, uv.b * light, alpha);
+    }
+
+    private void pushRaw(List<Float> values, float x, float y, float z, float u, float v,
+                         float r, float g, float b, float alpha) {
         values.add(x);
         values.add(y);
         values.add(z);
         values.add(u);
         values.add(v);
-        values.add(clamp(uv.r * light));
-        values.add(clamp(uv.g * light));
-        values.add(clamp(uv.b * light));
+        values.add(clamp(r));
+        values.add(clamp(g));
+        values.add(clamp(b));
         values.add(alpha);
     }
 
     private float clamp(float value) {
-        return Math.max(0.0f, Math.min(1.0f, value));
+        return MeshMath.clamp01(value);
     }
 
     private float[] toFloatArray(List<Float> values) {

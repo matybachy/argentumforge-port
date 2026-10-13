@@ -27,7 +27,8 @@ This repository currently includes:
 - Java 8-compatible Gradle build setup
 - client hook via RenderWorldLastEvent
 - a VBO-based chunk renderer with solid/cutout/translucent passes
-- texture-atlas binding (`TextureMap.locationBlocksTexture`) and sprite UV lookup with safe fallback
+- texture-atlas binding (`TextureMap.locationBlocksTexture`) and baked-model sprite UV lookup with missing-sprite fallback
+- baked-model quad decoding for block geometry, with conservative fallback geometry if model access/decoding fails
 - world-light + lightweight AO sampling for per-vertex brightness approximation
 - conservative model fallback geometry (block bounds, crossed quads for plant-like blocks, fluid corner heights)
 - prioritized, bounded chunk rebuild scheduling with world/chunk/block invalidation hooks
@@ -58,8 +59,15 @@ Runtime validation should be performed in a real 1.8.9 client session:
 1. Enable `enableExperimentalRenderer=true` in the generated config file.
 2. Start client and load a world.
 3. Verify terrain in all three passes (solid/cutout/translucent), including water/glass/leaves.
-4. Place/break blocks near chunk borders and verify dirty rebuilds.
-5. Change dimension and verify mesh disposal/rebuild without stale VBOs.
+4. Validate representative model-heavy blocks (stairs/slabs/fences/panes/doors/trapdoors/rails/ladders/buttons/plates/plants/signs) against vanilla output.
+5. Place/break blocks near chunk borders and verify dirty rebuilds.
+6. Change dimension and verify mesh disposal/rebuild without stale VBOs.
+
+## Current truth-in-advertising status
+- Implemented: baked-model quad meshing path with safe fallback for unsupported/missing model data.
+- Partially implemented: fluid shape/UV parity and smooth-light/AO parity (current implementation is conservative and stable, not 1:1 vanilla).
+- Unverified in this execution environment: real in-game visual parity/performance due unavailable runtime client validation here.
+- Platform-blocked: direct parity with upstream Argentum/Celeritas renderer abstractions beyond what Forge 1.8.9 exposes.
 
 ## Known blockers
 - Upstream code makes extensive use of custom render abstractions not present in standard Forge 1.8.9.
