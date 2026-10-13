@@ -39,6 +39,7 @@ public class ClientProxy extends CommonProxy {
     @SubscribeEvent
     public void onClientTick(TickEvent.ClientTickEvent event) {
         if (event.phase == TickEvent.Phase.END) {
+            if (renderer != null) renderer.onClientTick();
             if (ArgentumForge.ENABLE_EXPERIMENTAL_CHUNK_RENDERER) {
                 meshManager.onTick();
             }
