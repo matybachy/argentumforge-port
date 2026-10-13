@@ -4,6 +4,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.entity.Entity;
 import net.minecraft.util.MathHelper;
 import net.minecraft.world.World;
+import org.lwjgl.opengl.GL11;
 
 import java.util.HashMap;
 import java.util.HashSet;
@@ -107,17 +108,30 @@ public final class ChunkMeshManager {
         GLState.pushMatrix();
         GLState.translate(-px, -py, -pz);
 
-        Iterator<Map.Entry<Long, ChunkMesh>> it = meshes.entrySet().iterator();
-        while (it.hasNext()) {
-            Map.Entry<Long, ChunkMesh> entry = it.next();
+        // First pass: solid geometry
+        GL11.glEnable(GL11.GL_TEXTURE_2D);
+        GL11.glDisable(GL11.GL_BLEND);
+        for (Map.Entry<Long, ChunkMesh> entry : meshes.entrySet()) {
             long key = entry.getKey();
             int chunkX = (int) (key >> 32);
             int chunkZ = (int) key;
-            if (!culler.shouldRenderChunk(view, chunkX, chunkZ)) {
-                continue;
-            }
-            entry.getValue().render();
+            if (!culler.shouldRenderChunk(view, chunkX, chunkZ)) continue;
+            entry.getValue().renderSolid();
         }
+
+        // Second pass: translucent geometry
+        GL11.glEnable(GL11.GL_BLEND);
+        GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
+        GL11.glDepthMask(false);
+        for (Map.Entry<Long, ChunkMesh> entry : meshes.entrySet()) {
+            long key = entry.getKey();
+            int chunkX = (int) (key >> 32);
+            int chunkZ = (int) key;
+            if (!culler.shouldRenderChunk(view, chunkX, chunkZ)) continue;
+            entry.getValue().renderTranslucent();
+        }
+        GL11.glDepthMask(true);
+        GL11.glDisable(GL11.GL_BLEND);
 
         GLState.popMatrix();
     }

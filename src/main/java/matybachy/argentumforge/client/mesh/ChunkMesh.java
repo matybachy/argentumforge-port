@@ -1,6 +1,7 @@
 package matybachy.argentumforge.client.mesh;
 
 import net.minecraft.world.World;
+import org.lwjgl.opengl.GL11;
 
 /**
  * A chunk mesh containing separate solid and translucent VBOs.
@@ -26,14 +27,39 @@ public final class ChunkMesh {
         built = true;
     }
 
+    /**
+     * Draw only the solid geometry. GL state (textures, blending) must be set by the caller.
+     */
+    public void renderSolid() {
+        if (!built) return;
+        solidVbo.draw();
+    }
+
+    /**
+     * Draw only the translucent geometry. Caller must set blending and depth write state appropriately.
+     */
+    public void renderTranslucent() {
+        if (!built) return;
+        translucentVbo.draw();
+    }
+
+    /**
+     * Convenience: draw both layers (solid then translucent) using default simple state.
+     */
     public void render() {
         if (!built) return;
 
-        // render solid first
-        solidVbo.draw();
+        // default simple ordering
+        GL11.glEnable(GL11.GL_TEXTURE_2D);
+        GL11.glDisable(GL11.GL_BLEND);
+        renderSolid();
 
-        // render translucent second (simple alpha overlay)
-        translucentVbo.draw();
+        GL11.glEnable(GL11.GL_BLEND);
+        GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
+        GL11.glDepthMask(false);
+        renderTranslucent();
+        GL11.glDepthMask(true);
+        GL11.glDisable(GL11.GL_BLEND);
     }
 
     public void dispose() {
