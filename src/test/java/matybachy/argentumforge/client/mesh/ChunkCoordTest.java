@@ -30,4 +30,24 @@ public class ChunkCoordTest {
         Assert.assertTrue(culler.shouldRenderChunk(0, 0, 3, 0));
         Assert.assertFalse(culler.shouldRenderChunk(0, 0, 4, 0));
     }
+
+    @Test
+    public void directionalCullKeepsChunksInFrontAtDistance() {
+        SimpleFrustumCuller culler = new SimpleFrustumCuller(16);
+        // yaw=0 looks toward +Z in vanilla
+        Assert.assertTrue(culler.passesDirectionalCull(0.0D, 0.0D, 0.0f, 0, 4));
+    }
+
+    @Test
+    public void directionalCullRejectsFarChunksBehindCamera() {
+        SimpleFrustumCuller culler = new SimpleFrustumCuller(16);
+        // yaw=0 looks toward +Z, so negative Z is behind
+        Assert.assertFalse(culler.passesDirectionalCull(0.0D, 0.0D, 0.0f, 0, -8));
+    }
+
+    @Test
+    public void directionalCullKeepsNearbyChunksEvenBehind() {
+        SimpleFrustumCuller culler = new SimpleFrustumCuller(16);
+        Assert.assertTrue(culler.passesDirectionalCull(0.0D, 0.0D, 0.0f, 0, -1));
+    }
 }

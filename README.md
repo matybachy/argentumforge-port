@@ -8,9 +8,10 @@ Current scope
 - Client render hook active: `RenderWorldLastEvent`
 - Chunk renderer prototype with solid/cutout/translucent passes and chunk lifecycle hooks
 - Terrain atlas binding via `TextureMap.locationBlocksTexture` with baked-model sprite lookup and missing-sprite fallback
-- World-light sampling + lightweight AO approximation for face/vertex shading
+- World-light sampling + lightweight AO approximation for face/vertex shading (including emissive full-bright fallback and corner-neighbor AO smoothing)
 - Baked-model quad meshing for vanilla block models (including slabs/stairs/fences/panes/doors/trapdoors/rails/etc.) with conservative block-bounds/crossed fallback
 - Conservative fluid top/side/bottom geometry with averaged corner heights, same-material internal-face suppression, and translucent layering
+- Conservative chunk visibility culling (radius + directional backface rejection) and chunk VBO buffer reuse
 - Vanilla fallback preserved; experimental renderer is disabled by default and config-driven
 
 Repository status
@@ -37,6 +38,7 @@ Known limits
 - Lighting/AO and model support are conservative Forge 1.8.9 approximations.
 - Model path still uses conservative per-face light/AO approximation and does not fully reproduce vanilla block-model AO weighting.
 - Optional effects/entity/weather/cloud hooks keep vanilla rendering as the compatibility path when optimization hooks are disabled or unsupported.
+- Build/runtime verification in this execution environment may be blocked when ForgeGradle cannot resolve `files.minecraftforge.net`.
 - Fluids and translucent ordering are chunk-level approximations and require runtime visual verification.
 - The experimental renderer is disabled by default unless explicitly enabled for runtime validation.
 

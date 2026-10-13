@@ -13,11 +13,14 @@ public final class GlVbo implements GpuBuffer {
     private static final int BYTES_PER_FLOAT = 4;
     private int vboId;
     private int vertexCount;
+    private int capacityFloats;
 
     @Override
     public void upload(float[] vertices) {
-        delete();
-        if (vertices == null || vertices.length == 0) return;
+        if (vertices == null || vertices.length == 0) {
+            vertexCount = 0;
+            return;
+        }
         if (vertices.length % FLOATS_PER_VERTEX != 0) {
             throw new IllegalArgumentException("Invalid terrain vertex buffer length");
         }
@@ -25,9 +28,16 @@ public final class GlVbo implements GpuBuffer {
         vertexCount = vertices.length / FLOATS_PER_VERTEX;
         FloatBuffer buffer = BufferUtils.createFloatBuffer(vertices.length);
         buffer.put(vertices).flip();
-        vboId = GL15.glGenBuffers();
+        if (vboId == 0) {
+            vboId = GL15.glGenBuffers();
+        }
         GL15.glBindBuffer(GL15.GL_ARRAY_BUFFER, vboId);
-        GL15.glBufferData(GL15.GL_ARRAY_BUFFER, buffer, GL15.GL_STATIC_DRAW);
+        if (vertices.length > capacityFloats) {
+            GL15.glBufferData(GL15.GL_ARRAY_BUFFER, buffer, GL15.GL_STATIC_DRAW);
+            capacityFloats = vertices.length;
+        } else {
+            GL15.glBufferSubData(GL15.GL_ARRAY_BUFFER, 0L, buffer);
+        }
         GL15.glBindBuffer(GL15.GL_ARRAY_BUFFER, 0);
     }
 
@@ -59,5 +69,6 @@ public final class GlVbo implements GpuBuffer {
         }
         vboId = 0;
         vertexCount = 0;
+        capacityFloats = 0;
     }
 }

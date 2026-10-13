@@ -21,9 +21,10 @@ public final class TerrainLighting implements LightingLookup {
     public float[] sampleVertexLight(World world, BlockPos pos, EnumFacing face, Block block, boolean emissive) {
         float[] values = new float[] {1.0f, 1.0f, 1.0f, 1.0f};
         if (!ArgentumConfig.enableLightingAo || world == null || pos == null) return values;
+        if (emissive) return values;
 
         BlockPos facePos = pos.offset(face);
-        float base = sampleCombined(world, facePos, emissive ? 15 : 0);
+        float base = sampleCombined(world, facePos, 0);
         float ao0 = sampleAo(world, facePos, face, -1, -1);
         float ao1 = sampleAo(world, facePos, face, 1, -1);
         float ao2 = sampleAo(world, facePos, face, 1, 1);
@@ -48,12 +49,13 @@ public final class TerrainLighting implements LightingLookup {
     }
 
     private float sampleAo(World world, BlockPos pos, EnumFacing face, int side, int up) {
-        BlockPos sidePos = offsetForFace(pos, face, side, up);
-        Block sample = world.getBlockState(sidePos).getBlock();
-        if (sample == null) return 1.0f;
-        float ao = sample.getAmbientOcclusionLightValue();
-        if (sample.isOpaqueCube()) ao *= 0.85f;
-        return clamp(ao);
+        BlockPos sidePos = offsetForFace(pos, face, side, 0);
+        BlockPos upPos = offsetForFace(pos, face, 0, up);
+        BlockPos cornerPos = offsetForFace(pos, face, side, up);
+        float sideAo = sampleBlockAo(world, sidePos);
+        float upAo = sampleBlockAo(world, upPos);
+        float cornerAo = sampleBlockAo(world, cornerPos);
+        return clamp((sideAo + upAo + cornerAo + 1.0f) * 0.25f);
     }
 
     private BlockPos offsetForFace(BlockPos pos, EnumFacing face, int side, int up) {
@@ -75,5 +77,13 @@ public final class TerrainLighting implements LightingLookup {
         if (value < 0.0f) return 0.0f;
         if (value > 1.0f) return 1.0f;
         return value;
+    }
+
+    private float sampleBlockAo(World world, BlockPos pos) {
+        Block sample = world.getBlockState(pos).getBlock();
+        if (sample == null) return 1.0f;
+        float ao = sample.getAmbientOcclusionLightValue();
+        if (sample.isOpaqueCube()) ao *= 0.85f;
+        return clamp(ao);
     }
 }
