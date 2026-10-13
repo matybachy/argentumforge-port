@@ -24,7 +24,7 @@ public class ArgentumRenderer {
             return;
         }
 
-        Entity view = mc.renderViewEntity;
+        Entity view = mc.getRenderViewEntity();
         if (view == null) {
             return;
         }
