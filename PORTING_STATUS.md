@@ -12,12 +12,12 @@ This repository currently contains an experimental Forge 1.8.9 mod project with 
 - Chunk-mesh prototype: Implemented
 - Block-face mesher with fallback models: Implemented
 - Baked-model quad terrain meshing for vanilla blockstate models: Implemented (with fallback when unavailable)
-- Rebuild queue with priority + per-tick budget: Implemented
+- Rebuild queue with priority + per-tick budget: Implemented (distance-prioritized and radius-filtered candidates)
 - Correct opaque/cutout/translucent layering: Implemented
 - Texture atlas / UV mapping (with missing-sprite fallback): Implemented
 - Lighting and AO (lightweight): Implemented (conservative per-vertex approximation)
 - Chunk visibility and frustum culling: Implemented (distance/frustum-lite)
-- Chunk/world/block invalidation hooks: Implemented
+- Chunk/world/block invalidation hooks: Implemented (chunk load/unload, block place/break, multiplace, and chunk-edge spillover)
 - Entity/item optimization hooks: Implemented (optional no-op + vanilla fallback)
 - Cloud/weather hooks: Implemented (optional no-op + vanilla fallback)
 - Optional post-effect pipeline: Implemented (capability-gated no-op fallback)
@@ -36,6 +36,7 @@ This repository currently contains an experimental Forge 1.8.9 mod project with 
 - The config default leaves the experimental renderer disabled.
 - Terrain path uses model/atlas/light fallbacks to stay buildable on Forge 1.8.9.
 - Unsupported/failed model decoding falls back to bounds/cross/fluid geometry instead of dropping terrain faces.
+- Fluid meshing now suppresses same-material internal faces (including flowing/still variants), uses Forge-style falling-level normalization, and renders visible bottom faces.
 
 ## Remaining blockers
 - Upstream Argentum code relies on rendering subsystems and platform abstractions absent from standard Forge 1.8.9.

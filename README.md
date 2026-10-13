@@ -10,7 +10,7 @@ Current scope
 - Terrain atlas binding via `TextureMap.locationBlocksTexture` with baked-model sprite lookup and missing-sprite fallback
 - World-light sampling + lightweight AO approximation for face/vertex shading
 - Baked-model quad meshing for vanilla block models (including slabs/stairs/fences/panes/doors/trapdoors/rails/etc.) with conservative block-bounds/crossed fallback
-- Conservative fluid top/side geometry with averaged corner heights and translucent layering
+- Conservative fluid top/side/bottom geometry with averaged corner heights, same-material internal-face suppression, and translucent layering
 - Vanilla fallback preserved; experimental renderer is disabled by default and config-driven
 
 Repository status
@@ -36,7 +36,7 @@ Known limits
 - This is not full upstream Argentum parity.
 - Lighting/AO and model support are conservative Forge 1.8.9 approximations.
 - Model path still uses conservative per-face light/AO approximation and does not fully reproduce vanilla block-model AO weighting.
-- Optional effects/entity/weather/cloud hooks currently default to vanilla/no-op fallback.
+- Optional effects/entity/weather/cloud hooks keep vanilla rendering as the compatibility path when optimization hooks are disabled or unsupported.
 - Fluids and translucent ordering are chunk-level approximations and require runtime visual verification.
 - The experimental renderer is disabled by default unless explicitly enabled for runtime validation.
 

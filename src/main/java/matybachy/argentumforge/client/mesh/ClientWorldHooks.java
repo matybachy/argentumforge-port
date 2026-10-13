@@ -4,9 +4,12 @@ import net.minecraft.world.World;
 import net.minecraftforge.event.world.BlockEvent;
 import net.minecraftforge.event.world.ChunkEvent;
 import net.minecraftforge.event.world.WorldEvent;
+import net.minecraftforge.common.util.BlockSnapshot;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
+
+import java.util.List;
 
 @SideOnly(Side.CLIENT)
 public final class ClientWorldHooks {
@@ -48,6 +51,17 @@ public final class ClientWorldHooks {
     @SubscribeEvent
     public void onBlockBreak(BlockEvent.BreakEvent event) {
         markBlock(event.world, event.pos.getX(), event.pos.getZ());
+    }
+
+    @SubscribeEvent
+    public void onBlockMultiPlace(BlockEvent.MultiPlaceEvent event) {
+        if (event.world == null || !event.world.isRemote) return;
+        List<BlockSnapshot> snapshots = event.getReplacedBlockSnapshots();
+        if (snapshots == null || snapshots.isEmpty()) return;
+        for (BlockSnapshot snapshot : snapshots) {
+            if (snapshot == null || snapshot.getPos() == null) continue;
+            manager.markBlockDirty(snapshot.getPos().getX(), snapshot.getPos().getZ());
+        }
     }
 
     private void markBlock(World world, int x, int z) {
