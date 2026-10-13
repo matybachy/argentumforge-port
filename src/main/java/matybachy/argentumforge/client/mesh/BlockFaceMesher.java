@@ -32,13 +32,14 @@ public final class BlockFaceMesher {
                     boolean blended = TerrainTextureAtlas.isTransparent(block);
                     boolean alphaTested = !blended && TerrainTextureAtlas.isCutout(block);
                     List<Float> target = blended ? translucent : (alphaTested ? cutout : solid);
+                    boolean special = blended || alphaTested;
 
-                    if (isFaceVisible(world, wx + 1, y, wz, block)) emitFace(world, target, wx + 1, y, wz, -1, 0, 0, block, blended || alphaTested);
-                    if (isFaceVisible(world, wx - 1, y, wz, block)) emitFace(world, target, wx, y, wz, 1, 0, 0, block, blended || alphaTested);
-                    if (isFaceVisible(world, wx, y + 1, wz, block)) emitFace(world, target, wx, y + 1, wz, 0, -1, 0, block, blended || alphaTested);
-                    if (isFaceVisible(world, wx, y - 1, wz, block)) emitFace(world, target, wx, y, wz, 0, 1, 0, block, blended || alphaTested);
-                    if (isFaceVisible(world, wx, y, wz + 1, block)) emitFace(world, target, wx, y, wz + 1, 0, 0, -1, block, blended || alphaTested);
-                    if (isFaceVisible(world, wx, y, wz - 1, block)) emitFace(world, target, wx, y, wz, 0, 0, 1, block, blended || alphaTested);
+                    emitIfVisible(world, target, wx, y, wz, block, 1, 0, 0, special);
+                    emitIfVisible(world, target, wx, y, wz, block, -1, 0, 0, special);
+                    emitIfVisible(world, target, wx, y, wz, block, 0, 1, 0, special);
+                    emitIfVisible(world, target, wx, y, wz, block, 0, -1, 0, special);
+                    emitIfVisible(world, target, wx, y, wz, block, 0, 0, 1, special);
+                    emitIfVisible(world, target, wx, y, wz, block, 0, 0, -1, special);
                 }
             }
         }
@@ -46,40 +47,77 @@ public final class BlockFaceMesher {
         return new MeshData(toFloatArray(solid), toFloatArray(cutout), toFloatArray(translucent));
     }
 
+    private void emitIfVisible(World world, List<Float> vertices, int x, int y, int z,
+                               Block source, int nx, int ny, int nz, boolean special) {
+        if (isFaceVisible(world, x + nx, y + ny, z + nz, source)) {
+            emitFace(world, vertices, x, y, z, nx, ny, nz, source, special);
+        }
+    }
+
     private boolean isFaceVisible(World world, int x, int y, int z, Block source) {
-        if (y < 0 || y >= world.getHeight()) return true;
-        if (world.isAirBlock(x, y, z)) return true;
+        if (y < 0 || y >= world.getHeight() || world.isAirBlock(x, y, z)) return true;
 
         Block neighbor = world.getBlock(x, y, z);
         if (neighbor == null) return true;
-        return TerrainTextureAtlas.isTransparent(neighbor) &&
-                TerrainTextureAtlas.isTransparent(source) && neighbor != source;
+
+        boolean sourceBlended = TerrainTextureAtlas.isTransparent(source);
+        boolean neighborBlended = TerrainTextureAtlas.isTransparent(neighbor);
+        boolean sourceCutout = TerrainTextureAtlas.isCutout(source);
+        boolean neighborCutout = TerrainTextureAtlas.isCutout(neighbor);
+
+        // Opaque blocks hide neighboring opaque/cutout faces. Transparent blocks do not hide
+        // each other's faces unless they are the same liquid/material family.
+        if (!sourceBlended && !sourceCutout && !neighborBlended && !neighborCutout) return false;
+        if (sourceBlended && neighborBlended && source == neighbor) return false;
+        if (sourceCutout && neighborCutout && source == neighbor) return false;
+        return true;
     }
 
-    private void emitFace(World world, List<Float> vertices, int px, int py, int pz,
+    private void emitFace(World world, List<Float> vertices, int x, int y, int z,
                           int nx, int ny, int nz, Block block, boolean special) {
         TerrainTextureAtlas.FaceUV uv = TerrainTextureAtlas.getFaceUVs(block, nx, ny, nz);
         float[] color = TerrainTextureAtlas.getFaceColor(block, special);
-        float light = TerrainLighting.getFaceLight(world, px, py, pz, nx, ny, nz);
+        float light = TerrainLighting.getFaceLight(world, x + nx, y + ny, z + nz, nx, ny, nz);
         float alpha = TerrainTextureAtlas.getAlpha(block, special);
-
         float r = clamp(color[0] * light);
         float g = clamp(color[1] * light);
         float b = clamp(color[2] * light);
 
-        float x0 = px - (nx == 1 ? 1 : 0);
-        float x1 = x0 + 1.0f;
-        float y0 = py - (ny == 1 ? 1 : 0);
-        float y1 = y0 + 1.0f;
-        float z0 = pz - (nz == 1 ? 1 : 0);
-        float z1 = z0 + 1.0f;
+        float x0 = x;
+        float x1 = x + 1.0f;
+        float y0 = y;
+        float y1 = y + 1.0f;
+        float z0 = z;
+        float z1 = z + 1.0f;
 
-        push(vertices, x0, y0, z0, uv.u0, uv.v0, r, g, b, alpha);
-        push(vertices, x1, y0, z0, uv.u1, uv.v0, r, g, b, alpha);
-        push(vertices, x1, y1, z1, uv.u1, uv.v1, r, g, b, alpha);
-        push(vertices, x0, y0, z0, uv.u0, uv.v0, r, g, b, alpha);
-        push(vertices, x1, y1, z1, uv.u1, uv.v1, r, g, b, alpha);
-        push(vertices, x0, y1, z1, uv.u0, uv.v1, r, g, b, alpha);
+        if (nx == 1) {
+            quad(vertices, x1, y0, z1, x1, y0, z0, x1, y1, z0, x1, y1, z1, uv, r, g, b, alpha);
+        } else if (nx == -1) {
+            quad(vertices, x0, y0, z0, x0, y0, z1, x0, y1, z1, x0, y1, z0, uv, r, g, b, alpha);
+        } else if (ny == 1) {
+            quad(vertices, x0, y1, z1, x1, y1, z1, x1, y1, z0, x0, y1, z0, uv, r, g, b, alpha);
+        } else if (ny == -1) {
+            quad(vertices, x0, y0, z0, x1, y0, z0, x1, y0, z1, x0, y0, z1, uv, r, g, b, alpha);
+        } else if (nz == 1) {
+            quad(vertices, x0, y0, z1, x1, y0, z1, x1, y1, z1, x0, y1, z1, uv, r, g, b, alpha);
+        } else {
+            quad(vertices, x1, y0, z0, x0, y0, z0, x0, y1, z0, x1, y1, z0, uv, r, g, b, alpha);
+        }
+    }
+
+    private void quad(List<Float> vertices,
+                      float ax, float ay, float az,
+                      float bx, float by, float bz,
+                      float cx, float cy, float cz,
+                      float dx, float dy, float dz,
+                      TerrainTextureAtlas.FaceUV uv,
+                      float r, float g, float b, float a) {
+        push(vertices, ax, ay, az, uv.u0, uv.v1, r, g, b, a);
+        push(vertices, bx, by, bz, uv.u1, uv.v1, r, g, b, a);
+        push(vertices, cx, cy, cz, uv.u1, uv.v0, r, g, b, a);
+        push(vertices, ax, ay, az, uv.u0, uv.v1, r, g, b, a);
+        push(vertices, cx, cy, cz, uv.u1, uv.v0, r, g, b, a);
+        push(vertices, dx, dy, dz, uv.u0, uv.v0, r, g, b, a);
     }
 
     private void push(List<Float> values, float x, float y, float z, float u, float v,
