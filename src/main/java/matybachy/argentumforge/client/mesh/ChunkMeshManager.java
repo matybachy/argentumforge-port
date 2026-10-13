@@ -1,7 +1,7 @@
 package matybachy.argentumforge.client.mesh;
 
 import net.minecraft.client.Minecraft;
-import net.minecraft.entity.EntityLivingBase;
+import net.minecraft.entity.Entity;
 import net.minecraft.util.MathHelper;
 import net.minecraft.world.World;
 
@@ -13,11 +13,18 @@ import java.util.Map;
  */
 public final class ChunkMeshManager {
     private final Minecraft mc = Minecraft.getMinecraft();
-    private final Map<Long, ChunkMesh> meshes = new HashMap<>();
+    private final Map<Long, ChunkMesh> meshes = new HashMap<Long, ChunkMesh>();
     private boolean enabled = false;
 
     public void setEnabled(boolean enabled) {
         this.enabled = enabled;
+    }
+
+    public void rebuildChunk(int chunkX, int chunkZ, World world) {
+        long key = (((long) chunkX) << 32) ^ (chunkZ & 0xffffffffL);
+        ChunkMesh mesh = new ChunkMesh(chunkX, chunkZ);
+        mesh.build(world);
+        meshes.put(key, mesh);
     }
 
     public void onTick() {
@@ -27,17 +34,15 @@ public final class ChunkMeshManager {
         int pz = MathHelper.floor_double(mc.thePlayer.posZ);
         int chunkX = px >> 4;
         int chunkZ = pz >> 4;
-        int radius = 2; // small radius for prototype
+        int radius = 2;
         World world = mc.theWorld;
         for (int dx = -radius; dx <= radius; dx++) {
             for (int dz = -radius; dz <= radius; dz++) {
                 int cx = chunkX + dx;
                 int cz = chunkZ + dz;
-                long key = (((long)cx) << 32) ^ (cz & 0xffffffffL);
+                long key = (((long) cx) << 32) ^ (cz & 0xffffffffL);
                 if (!meshes.containsKey(key)) {
-                    ChunkMesh mesh = new ChunkMesh(cx, cz);
-                    mesh.build(world);
-                    meshes.put(key, mesh);
+                    rebuildChunk(cx, cz, world);
                 }
             }
         }
@@ -46,24 +51,23 @@ public final class ChunkMeshManager {
     public void render() {
         if (!enabled) return;
         if (mc.theWorld == null || mc.getRenderViewEntity() == null) return;
-        EntityLivingBase view = (EntityLivingBase) mc.getRenderViewEntity();
+        Entity view = mc.getRenderViewEntity();
         double px = view.posX;
         double py = view.posY;
         double pz = view.posZ;
 
-        // camera-relative translate
         GLState.pushMatrix();
         GLState.translate(-px, -py, -pz);
-
         for (ChunkMesh mesh : meshes.values()) {
             mesh.render();
         }
-
         GLState.popMatrix();
     }
 
     public void dispose() {
-        for (ChunkMesh mesh : meshes.values()) mesh.dispose();
+        for (ChunkMesh mesh : meshes.values()) {
+            mesh.dispose();
+        }
         meshes.clear();
     }
 }
