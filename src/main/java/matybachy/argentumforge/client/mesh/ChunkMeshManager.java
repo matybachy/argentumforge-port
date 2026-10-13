@@ -1,0 +1,69 @@
+package matybachy.argentumforge.client.mesh;
+
+import net.minecraft.client.Minecraft;
+import net.minecraft.entity.EntityLivingBase;
+import net.minecraft.util.MathHelper;
+import net.minecraft.world.World;
+
+import java.util.HashMap;
+import java.util.Map;
+
+/**
+ * Manages ChunkMesh instances for nearby chunks. Builds simple meshes on demand and renders them.
+ */
+public final class ChunkMeshManager {
+    private final Minecraft mc = Minecraft.getMinecraft();
+    private final Map<Long, ChunkMesh> meshes = new HashMap<>();
+    private boolean enabled = false;
+
+    public void setEnabled(boolean enabled) {
+        this.enabled = enabled;
+    }
+
+    public void onTick() {
+        if (!enabled) return;
+        if (mc.theWorld == null || mc.thePlayer == null) return;
+        int px = MathHelper.floor_double(mc.thePlayer.posX);
+        int pz = MathHelper.floor_double(mc.thePlayer.posZ);
+        int chunkX = px >> 4;
+        int chunkZ = pz >> 4;
+        int radius = 2; // small radius for prototype
+        World world = mc.theWorld;
+        for (int dx = -radius; dx <= radius; dx++) {
+            for (int dz = -radius; dz <= radius; dz++) {
+                int cx = chunkX + dx;
+                int cz = chunkZ + dz;
+                long key = (((long)cx) << 32) ^ (cz & 0xffffffffL);
+                if (!meshes.containsKey(key)) {
+                    ChunkMesh mesh = new ChunkMesh(cx, cz);
+                    mesh.build(world);
+                    meshes.put(key, mesh);
+                }
+            }
+        }
+    }
+
+    public void render() {
+        if (!enabled) return;
+        if (mc.theWorld == null || mc.getRenderViewEntity() == null) return;
+        EntityLivingBase view = (EntityLivingBase) mc.getRenderViewEntity();
+        double px = view.posX;
+        double py = view.posY;
+        double pz = view.posZ;
+
+        // camera-relative translate
+        GLState.pushMatrix();
+        GLState.translate(-px, -py, -pz);
+
+        for (ChunkMesh mesh : meshes.values()) {
+            mesh.render();
+        }
+
+        GLState.popMatrix();
+    }
+
+    public void dispose() {
+        for (ChunkMesh mesh : meshes.values()) mesh.dispose();
+        meshes.clear();
+    }
+}
