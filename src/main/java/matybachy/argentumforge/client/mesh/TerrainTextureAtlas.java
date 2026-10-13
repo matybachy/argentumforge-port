@@ -5,9 +5,9 @@ import net.minecraft.block.Block;
 import java.util.Locale;
 
 /**
- * Lightweight texture atlas mapping for the prototype terrain renderer.
- * This is intentionally simple: it maps a few common block families to a small atlas-space UV table,
- * which gives the renderer deterministic texture coordinates without requiring a full modern atlas implementation.
+ * Lightweight texture atlas and special-block metadata for the terrain prototype.
+ * This intentionally uses atlas-style UV ranges and simple classification rather than a full
+ * modern texture pipeline, which keeps the implementation compatible with the 1.8.9 client.
  */
 public final class TerrainTextureAtlas {
     private TerrainTextureAtlas() {

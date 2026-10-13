@@ -7,7 +7,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Generates water-surface quads for the active chunk so liquid blocks render with a separate translucent pass.
+ * Generates water-surface quads for the active chunk so liquid blocks render in a translucent pass.
  */
 public final class WaterMesher {
     public MeshData build(World world, int chunkX, int chunkZ) {
@@ -25,7 +25,7 @@ public final class WaterMesher {
                     if (block == null || !block.getMaterial().isLiquid()) continue;
 
                     if (isWaterSurfaceVisible(world, wx, wy, wz)) {
-                        emitTopSurface(vertices, wx, wy, wz, block);
+                        emitSurface(vertices, wx, wy, wz, block);
                     }
                 }
             }
@@ -42,7 +42,7 @@ public final class WaterMesher {
         return !above.getMaterial().isLiquid();
     }
 
-    private void emitTopSurface(List<Float> verts, int x, int y, int z, Block block) {
+    private void emitSurface(List<Float> verts, int x, int y, int z, Block block) {
         TerrainTextureAtlas.FaceUV uv = TerrainTextureAtlas.getFaceUVs(block, 0, 1, 0);
         float[] color = TerrainTextureAtlas.getFaceColor(block, true);
         float alpha = TerrainTextureAtlas.getAlpha(block, true);

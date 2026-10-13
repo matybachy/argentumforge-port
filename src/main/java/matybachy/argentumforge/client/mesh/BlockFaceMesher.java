@@ -7,9 +7,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Phase 6 prototype work: special-block and translucent mesh support.
- * This keeps water handling separate from the solid terrain mesh so the chunk renderer can represent liquid blocks
- * as a translucent layer instead of forcing them into the opaque pass.
+ * Phase 6 prototype work: render special blocks with proper translucent output rather than forcing them into the solid pass.
  */
 public final class BlockFaceMesher {
     public MeshData buildChunkMesh(World world, int chunkX, int chunkZ) {
