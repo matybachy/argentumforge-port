@@ -31,8 +31,9 @@ This repository currently contains an experimental Forge 1.8.9 mod project with 
 - Full upstream parity: Blocked by target-platform differences and rendering abstraction gaps
 
 ## Build results
-- Current status: blocked in this execution environment by inability to resolve ForgeGradle host
-- Command: ./gradlew clean build --stacktrace --no-daemon
+- Current status: blocked in this execution environment by DNS resolution failure for the ForgeGradle Maven host while resolving `net.minecraftforge.gradle:ForgeGradle:2.1-SNAPSHOT`.
+- Command: gradle clean build --stacktrace --no-daemon
+- Result: FAILED during configuration with `UnknownHostException: maven.minecraftforge.net` before Java compilation could start.
 - Expected output: build/libs/*.jar (on network-enabled environment with ForgeGradle access)
 
 ## Runtime notes

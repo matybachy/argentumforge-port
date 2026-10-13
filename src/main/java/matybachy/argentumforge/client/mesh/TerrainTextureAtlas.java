@@ -6,7 +6,7 @@ import net.minecraft.block.state.IBlockState;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.BlockRendererDispatcher;
 import net.minecraft.client.renderer.block.model.BakedQuad;
-import net.minecraft.client.renderer.block.model.IBakedModel;
+import net.minecraft.client.resources.model.IBakedModel;
 import net.minecraft.client.renderer.texture.TextureAtlasSprite;
 import net.minecraft.client.renderer.texture.TextureMap;
 import net.minecraft.util.BlockPos;
@@ -124,12 +124,12 @@ public final class TerrainTextureAtlas implements TextureLookup {
             IBakedModel model = dispatcher.getModelFromBlockState(state, world, pos);
             if (model != null) {
                 List<BakedQuad> faceQuads = model.getFaceQuads(face);
-                if (!faceQuads.isEmpty() && faceQuads.get(0).getSprite() != null) {
-                    return faceQuads.get(0).getSprite();
+                if (!faceQuads.isEmpty()) {
+                    return dispatcher.getBlockModelShapes().getTexture(state);
                 }
                 List<BakedQuad> generalQuads = model.getGeneralQuads();
-                if (!generalQuads.isEmpty() && generalQuads.get(0).getSprite() != null) {
-                    return generalQuads.get(0).getSprite();
+                if (!generalQuads.isEmpty()) {
+                    return dispatcher.getBlockModelShapes().getTexture(state);
                 }
             }
             return dispatcher.getBlockModelShapes().getTexture(state);

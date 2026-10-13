@@ -24,7 +24,7 @@ public final class WaterMesher {
                     int wx = baseX + x;
                     int wy = y;
                     int wz = baseZ + z;
-                    Block block = world.getBlock(wx, wy, wz);
+                    Block block = world.getBlockState(new BlockPos(wx, wy, wz)).getBlock();
                     if (block == null || !block.getMaterial().isLiquid()) continue;
 
                     if (isWaterSurfaceVisible(world, wx, wy, wz)) {
@@ -40,7 +40,7 @@ public final class WaterMesher {
     private boolean isWaterSurfaceVisible(World world, int x, int y, int z) {
         int aboveY = y + 1;
         if (aboveY >= world.getHeight()) return true;
-        Block above = world.getBlock(x, aboveY, z);
+        Block above = world.getBlockState(new BlockPos(x, aboveY, z)).getBlock();
         if (above == null) return true;
         return !above.getMaterial().isLiquid();
     }

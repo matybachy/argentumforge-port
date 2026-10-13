@@ -59,8 +59,8 @@ public final class ClientWorldHooks {
         List<BlockSnapshot> snapshots = event.getReplacedBlockSnapshots();
         if (snapshots == null || snapshots.isEmpty()) return;
         for (BlockSnapshot snapshot : snapshots) {
-            if (snapshot == null || snapshot.getPos() == null) continue;
-            manager.markBlockDirty(snapshot.getPos().getX(), snapshot.getPos().getZ());
+            if (snapshot == null) continue;
+            manager.markBlockDirty(snapshot.x, snapshot.z);
         }
     }
 
