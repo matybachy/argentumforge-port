@@ -7,8 +7,9 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * A more realistic chunk mesher for the prototype stage.
- * It separates geometry into solid and translucent layers, which is the minimum required for correct terrain rendering.
+ * Phase 2 prototype work: add UV coordinates and basic face lighting to the terrain mesh.
+ * This remains intentionally simple and does not yet represent the final Argentum renderer,
+ * but it moves the prototype toward a more realistic 1.8.9 chunk mesh.
  */
 public final class BlockFaceMesher {
     public MeshData buildChunkMesh(World world, int chunkX, int chunkZ) {
@@ -50,9 +51,15 @@ public final class BlockFaceMesher {
     }
 
     private void emitFace(List<Float> verts, int px, int py, int pz, int nx, int ny, int nz, Block block, boolean transparent) {
-        float r = transparent ? 0.2f : 0.6f;
-        float g = transparent ? 0.4f : 0.8f;
-        float b = 0.4f + (Math.abs(block.hashCode()) % 100) / 250.0f;
+        float baseR = transparent ? 0.2f : 0.55f;
+        float baseG = transparent ? 0.4f : 0.75f;
+        float baseB = 0.38f + ((Math.abs(block.hashCode()) % 40) / 100.0f);
+        float faceShade = 0.6f + ((nx != 0 ? 0.15f : 0f) + (ny != 0 ? 0.25f : 0f) + (nz != 0 ? 0.10f : 0f));
+        if (faceShade > 1.0f) faceShade = 1.0f;
+
+        float r = clamp(baseR * faceShade);
+        float g = clamp(baseG * faceShade);
+        float b = clamp(baseB * faceShade);
         float a = transparent ? 0.7f : 1.0f;
 
         float x0 = px - (nx == 1 ? 1 : 0);
@@ -62,23 +69,32 @@ public final class BlockFaceMesher {
         float z0 = pz - (nz == 1 ? 1 : 0);
         float z1 = z0 + 1.0f;
 
-        pushVertex(verts, x0, y0, z0, r, g, b, a);
-        pushVertex(verts, x1, y0, z0, r, g, b, a);
-        pushVertex(verts, x1, y1, z1, r, g, b, a);
+        // Create a simple 2D UV mapping for each face, using a normalized face-space grid.
+        pushVertex(verts, x0, y0, z0, 0.0f, 0.0f, r, g, b, a);
+        pushVertex(verts, x1, y0, z0, 1.0f, 0.0f, r, g, b, a);
+        pushVertex(verts, x1, y1, z1, 1.0f, 1.0f, r, g, b, a);
 
-        pushVertex(verts, x0, y0, z0, r, g, b, a);
-        pushVertex(verts, x1, y1, z1, r, g, b, a);
-        pushVertex(verts, x0, y1, z1, r, g, b, a);
+        pushVertex(verts, x0, y0, z0, 0.0f, 0.0f, r, g, b, a);
+        pushVertex(verts, x1, y1, z1, 1.0f, 1.0f, r, g, b, a);
+        pushVertex(verts, x0, y1, z1, 0.0f, 1.0f, r, g, b, a);
     }
 
-    private void pushVertex(List<Float> verts, float x, float y, float z, float r, float g, float b, float a) {
+    private void pushVertex(List<Float> verts, float x, float y, float z, float u, float v, float r, float g, float b, float a) {
         verts.add(x);
         verts.add(y);
         verts.add(z);
+        verts.add(u);
+        verts.add(v);
         verts.add(r);
         verts.add(g);
         verts.add(b);
         verts.add(a);
+    }
+
+    private float clamp(float value) {
+        if (value < 0.0f) return 0.0f;
+        if (value > 1.0f) return 1.0f;
+        return value;
     }
 
     private float[] toFloatArray(List<Float> values) {
