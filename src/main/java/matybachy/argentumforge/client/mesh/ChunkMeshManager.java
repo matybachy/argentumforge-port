@@ -4,7 +4,6 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.entity.Entity;
 import net.minecraft.util.MathHelper;
 import net.minecraft.world.World;
-import org.lwjgl.opengl.GL11;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -16,10 +15,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-/**
- * Manages nearby chunk meshes and renders opaque, cutout, and translucent layers.
- * Translucent chunks are drawn back-to-front using a coarse chunk-center sort.
- */
+/** Manages nearby chunk meshes and their render passes. */
 public final class ChunkMeshManager {
     private static final int ACTIVE_RADIUS = 2;
     private static final int MAX_REBUILDS_PER_TICK = 2;
@@ -34,6 +30,7 @@ public final class ChunkMeshManager {
 
     public void setEnabled(boolean enabled) {
         this.enabled = enabled;
+        if (!enabled) dispose();
     }
 
     public void markDirty(int chunkX, int chunkZ) {
@@ -46,6 +43,17 @@ public final class ChunkMeshManager {
                 dirtyChunks.add(key(chunkX + dx, chunkZ + dz));
             }
         }
+    }
+
+    /** Marks a block's chunk and adjacent chunks dirty for boundary-face changes. */
+    public void markBlockDirty(int blockX, int blockZ) {
+        int chunkX = blockX >> 4;
+        int chunkZ = blockZ >> 4;
+        markDirty(chunkX, chunkZ);
+        if ((blockX & 15) == 0) markDirty(chunkX - 1, chunkZ);
+        if ((blockX & 15) == 15) markDirty(chunkX + 1, chunkZ);
+        if ((blockZ & 15) == 0) markDirty(chunkX, chunkZ - 1);
+        if ((blockZ & 15) == 15) markDirty(chunkX, chunkZ + 1);
     }
 
     public void rebuildChunk(int chunkX, int chunkZ, World world) {
@@ -62,30 +70,22 @@ public final class ChunkMeshManager {
     public void onTick() {
         if (!enabled || mc.theWorld == null || mc.thePlayer == null) return;
 
-        int chunkX = MathHelper.floor_double(mc.thePlayer.posX) >> 4;
-        int chunkZ = MathHelper.floor_double(mc.thePlayer.posZ) >> 4;
+        int centerX = MathHelper.floor_double(mc.thePlayer.posX) >> 4;
+        int centerZ = MathHelper.floor_double(mc.thePlayer.posZ) >> 4;
         World world = mc.theWorld;
 
         for (int dx = -ACTIVE_RADIUS; dx <= ACTIVE_RADIUS; dx++) {
             for (int dz = -ACTIVE_RADIUS; dz <= ACTIVE_RADIUS; dz++) {
-                int cx = chunkX + dx;
-                int cz = chunkZ + dz;
-                if (!meshes.containsKey(key(cx, cz))) markDirty(cx, cz);
+                int cx = centerX + dx;
+                int cz = centerZ + dz;
+                if (!meshes.containsKey(key(cx, cz))) dirtyChunks.add(key(cx, cz));
             }
         }
 
-        if (lastCenterX != chunkX || lastCenterZ != chunkZ) {
-            lastCenterX = chunkX;
-            lastCenterZ = chunkZ;
-            for (Iterator<Map.Entry<Long, ChunkMesh>> it = meshes.entrySet().iterator(); it.hasNext();) {
-                Map.Entry<Long, ChunkMesh> entry = it.next();
-                int cx = (int) (entry.getKey() >> 32);
-                int cz = (int) (long) entry.getKey();
-                if (Math.abs(cx - chunkX) > ACTIVE_RADIUS || Math.abs(cz - chunkZ) > ACTIVE_RADIUS) {
-                    entry.getValue().dispose();
-                    it.remove();
-                }
-            }
+        if (lastCenterX != centerX || lastCenterZ != centerZ) {
+            lastCenterX = centerX;
+            lastCenterZ = centerZ;
+            unloadOutside(centerX, centerZ);
         }
 
         int rebuilt = 0;
@@ -93,9 +93,21 @@ public final class ChunkMeshManager {
             long id = it.next();
             int cx = (int) (id >> 32);
             int cz = (int) id;
-            if (Math.abs(cx - chunkX) <= ACTIVE_RADIUS && Math.abs(cz - chunkZ) <= ACTIVE_RADIUS) {
+            if (Math.abs(cx - centerX) <= ACTIVE_RADIUS && Math.abs(cz - centerZ) <= ACTIVE_RADIUS) {
                 rebuildChunk(cx, cz, world);
                 rebuilt++;
+            }
+        }
+    }
+
+    private void unloadOutside(int centerX, int centerZ) {
+        for (Iterator<Map.Entry<Long, ChunkMesh>> it = meshes.entrySet().iterator(); it.hasNext();) {
+            Map.Entry<Long, ChunkMesh> entry = it.next();
+            int cx = (int) (entry.getKey() >> 32);
+            int cz = (int) (long) entry.getKey();
+            if (Math.abs(cx - centerX) > ACTIVE_RADIUS || Math.abs(cz - centerZ) > ACTIVE_RADIUS) {
+                entry.getValue().dispose();
+                it.remove();
             }
         }
     }
@@ -107,39 +119,31 @@ public final class ChunkMeshManager {
 
         GLState.pushRenderState();
         GLState.pushMatrix();
-        GLState.translate(-view.posX, -view.posY, -view.posZ);
-        GL11.glEnable(GL11.GL_TEXTURE_2D);
+        try {
+            GLState.translate(-view.posX, -view.posY, -view.posZ);
+            GLState.beginOpaquePass();
+            for (Map.Entry<Long, ChunkMesh> entry : visible) entry.getValue().renderSolid();
 
-        GLState.beginOpaquePass();
-        for (Map.Entry<Long, ChunkMesh> entry : visible) {
-            entry.getValue().renderSolid();
+            GLState.beginCutoutPass();
+            for (Map.Entry<Long, ChunkMesh> entry : visible) entry.getValue().renderCutout();
+
+            Collections.sort(visible, new DistanceComparator(view));
+            GLState.beginTranslucentPass();
+            for (Map.Entry<Long, ChunkMesh> entry : visible) entry.getValue().renderTranslucent();
+        } finally {
+            GLState.popMatrix();
+            GLState.popRenderState();
         }
-
-        GLState.beginCutoutPass();
-        for (Map.Entry<Long, ChunkMesh> entry : visible) {
-            entry.getValue().renderCutout();
-        }
-
-        Collections.sort(visible, new TranslucentDistanceComparator(view));
-        GLState.beginTranslucentPass();
-        for (Map.Entry<Long, ChunkMesh> entry : visible) {
-            entry.getValue().renderTranslucent();
-        }
-
-        GLState.popMatrix();
-        GLState.popRenderState();
     }
 
     private List<Map.Entry<Long, ChunkMesh>> visibleMeshes(Entity view) {
         List<Map.Entry<Long, ChunkMesh>> result = new ArrayList<Map.Entry<Long, ChunkMesh>>();
         for (Map.Entry<Long, ChunkMesh> entry : meshes.entrySet()) {
-            if (visible(view, entry.getKey())) result.add(entry);
+            int cx = (int) (entry.getKey() >> 32);
+            int cz = (int) (long) entry.getKey();
+            if (culler.shouldRenderChunk(view, cx, cz)) result.add(entry);
         }
         return result;
-    }
-
-    private boolean visible(Entity view, long id) {
-        return culler.shouldRenderChunk(view, (int) (id >> 32), (int) id);
     }
 
     private long key(int chunkX, int chunkZ) {
@@ -150,33 +154,29 @@ public final class ChunkMeshManager {
         for (ChunkMesh mesh : meshes.values()) mesh.dispose();
         meshes.clear();
         dirtyChunks.clear();
+        lastCenterX = Integer.MIN_VALUE;
+        lastCenterZ = Integer.MIN_VALUE;
     }
 
-    private static final class TranslucentDistanceComparator implements Comparator<Map.Entry<Long, ChunkMesh>> {
+    private static final class DistanceComparator implements Comparator<Map.Entry<Long, ChunkMesh>> {
         private final double viewX;
         private final double viewZ;
 
-        private TranslucentDistanceComparator(Entity view) {
-            this.viewX = view.posX;
-            this.viewZ = view.posZ;
+        private DistanceComparator(Entity view) {
+            viewX = view.posX;
+            viewZ = view.posZ;
         }
 
         @Override
         public int compare(Map.Entry<Long, ChunkMesh> left, Map.Entry<Long, ChunkMesh> right) {
-            long leftKey = left.getKey();
-            long rightKey = right.getKey();
-            double leftDistance = distanceSquared(leftKey);
-            double rightDistance = distanceSquared(rightKey);
-            return Double.compare(rightDistance, leftDistance);
+            return Double.compare(distance(right.getKey()), distance(left.getKey()));
         }
 
-        private double distanceSquared(long id) {
-            int chunkX = (int) (id >> 32);
-            int chunkZ = (int) id;
-            double centerX = (chunkX << 4) + 8.0D;
-            double centerZ = (chunkZ << 4) + 8.0D;
-            double dx = centerX - viewX;
-            double dz = centerZ - viewZ;
+        private double distance(long id) {
+            int cx = (int) (id >> 32);
+            int cz = (int) (long) id;
+            double dx = (cx << 4) + 8.0D - viewX;
+            double dz = (cz << 4) + 8.0D - viewZ;
             return dx * dx + dz * dz;
         }
     }

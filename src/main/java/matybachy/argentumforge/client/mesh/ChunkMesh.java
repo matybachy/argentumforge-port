@@ -1,9 +1,8 @@
 package matybachy.argentumforge.client.mesh;
 
 import net.minecraft.world.World;
-import org.lwjgl.opengl.GL11;
 
-/** Chunk mesh with opaque, alpha-tested cutout, and blended translucent VBOs. */
+/** Chunk mesh containing opaque, alpha-tested cutout, and blended translucent VBOs. */
 public final class ChunkMesh {
     private final int chunkX;
     private final int chunkZ;
@@ -19,6 +18,11 @@ public final class ChunkMesh {
     }
 
     public void build(World world) {
+        if (world == null) {
+            built = false;
+            return;
+        }
+
         BlockFaceMesher.MeshData data = mesher.buildChunkMesh(world, chunkX, chunkZ);
         solidVbo.upload(data.getSolidVertices());
         cutoutVbo.upload(data.getCutoutVertices());
@@ -36,25 +40,6 @@ public final class ChunkMesh {
 
     public void renderTranslucent() {
         if (built) translucentVbo.draw();
-    }
-
-    public void render() {
-        if (!built) return;
-        GL11.glDisable(GL11.GL_BLEND);
-        GL11.glDisable(GL11.GL_ALPHA_TEST);
-        renderSolid();
-
-        GL11.glEnable(GL11.GL_ALPHA_TEST);
-        GL11.glAlphaFunc(GL11.GL_GREATER, 0.5f);
-        renderCutout();
-        GL11.glDisable(GL11.GL_ALPHA_TEST);
-
-        GL11.glEnable(GL11.GL_BLEND);
-        GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
-        GL11.glDepthMask(false);
-        renderTranslucent();
-        GL11.glDepthMask(true);
-        GL11.glDisable(GL11.GL_BLEND);
     }
 
     public void dispose() {
