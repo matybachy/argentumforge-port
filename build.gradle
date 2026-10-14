@@ -1,7 +1,7 @@
 buildscript {
     repositories {
         mavenCentral()
-        maven { url 'https://files.minecraftforge.net/maven' }
+        maven { url 'https://maven.minecraftforge.net' }
     }
     dependencies {
         // Use ForgeGradle 2.x compatible with MC 1.8.9
@@ -19,17 +19,15 @@ targetCompatibility = 1.8
 
 repositories {
     mavenCentral()
-    maven { url 'https://files.minecraftforge.net/maven' }
+    maven { url 'https://maven.minecraftforge.net' }
 }
 
 dependencies {
-    // Runtime/development dependency on Forge for MC 1.8.9 (11.15.1.2318)
-    compile 'net.minecraftforge:forge:1.8.9-11.15.1.2318'
-    testCompile 'junit:junit:4.13.2'
+    testCompile 'junit:junit:4.12'
 }
 
 minecraft {
     version = '1.8.9-11.15.1.2318'
     runDir = 'run'
-    // omit mappings to let ForgeGradle pick appropriate MCP mappings for 1.8.9
+    mappings = 'stable_22'
 }
