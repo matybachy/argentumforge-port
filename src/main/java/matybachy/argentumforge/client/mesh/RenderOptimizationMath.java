@@ -18,4 +18,23 @@ public final class RenderOptimizationMath {
         int clampedMinimum = clampedParticleSetting(minimumThrottleSetting);
         return Math.max(clampedCurrent, clampedMinimum);
     }
+
+    public static boolean shouldActivateOptionalEffects(boolean enabledInConfig, boolean framebufferEnabled, boolean disabledByFailure) {
+        return enabledInConfig && framebufferEnabled && !disabledByFailure;
+    }
+
+    public static int clampedPercent(int value) {
+        return Math.max(0, Math.min(100, value));
+    }
+
+    public static double weatherMaxDistanceSq(int maxDistanceBlocks) {
+        double safeDistance = Math.max(1, maxDistanceBlocks);
+        return safeDistance * safeDistance;
+    }
+
+    public static boolean shouldCullWeatherColumn(double distanceSq, double maxDistanceSq, double forwardDot, double minForwardDot, double nearDistanceSq) {
+        if (distanceSq <= Math.max(0.0D, nearDistanceSq)) return false;
+        if (distanceSq > Math.max(1.0D, maxDistanceSq)) return true;
+        return forwardDot < minForwardDot;
+    }
 }

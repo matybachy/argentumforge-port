@@ -16,7 +16,11 @@ public final class ForgeOptionalEffectPipeline implements OptionalEffectPipeline
 
     @Override
     public boolean isSupported() {
-        return ArgentumConfig.enableOptionalEffects && OpenGlHelper.isFramebufferEnabled() && !disabledByFailure;
+        return RenderOptimizationMath.shouldActivateOptionalEffects(
+                ArgentumConfig.enableOptionalEffects,
+                OpenGlHelper.isFramebufferEnabled(),
+                disabledByFailure
+        );
     }
 
     @Override
@@ -36,8 +40,10 @@ public final class ForgeOptionalEffectPipeline implements OptionalEffectPipeline
         Minecraft mc = Minecraft.getMinecraft();
         active = false;
         if (mc == null || effectBuffer == null) return;
+        boolean depthWasEnabled = GL11.glIsEnabled(GL11.GL_DEPTH_TEST);
+        boolean alphaWasEnabled = GL11.glIsEnabled(GL11.GL_ALPHA_TEST);
+        Framebuffer main = mc.getFramebuffer();
         try {
-            Framebuffer main = mc.getFramebuffer();
             if (main != null) {
                 main.bindFramebuffer(true);
             }
@@ -45,13 +51,23 @@ public final class ForgeOptionalEffectPipeline implements OptionalEffectPipeline
             GL11.glDisable(GL11.GL_DEPTH_TEST);
             GL11.glDepthMask(false);
             float alpha = ArgentumConfig.optionalEffectsCompositeAlpha / 100.0f;
-            GL11.glColor4f(1.0f, 1.0f, 1.0f, alpha);
+            float tintR = RenderOptimizationMath.clampedPercent(ArgentumConfig.optionalEffectsTintRed) / 100.0f;
+            float tintG = RenderOptimizationMath.clampedPercent(ArgentumConfig.optionalEffectsTintGreen) / 100.0f;
+            float tintB = RenderOptimizationMath.clampedPercent(ArgentumConfig.optionalEffectsTintBlue) / 100.0f;
+            GL11.glColor4f(tintR, tintG, tintB, alpha);
             effectBuffer.framebufferRenderExt(mc.displayWidth, mc.displayHeight, true);
-            GL11.glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
-            GL11.glDepthMask(true);
-            GL11.glEnable(GL11.GL_DEPTH_TEST);
         } catch (Throwable ignored) {
             disableDueToFailure();
+        } finally {
+            if (main != null) {
+                main.bindFramebuffer(true);
+            }
+            GL11.glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
+            GL11.glDepthMask(true);
+            if (depthWasEnabled) GL11.glEnable(GL11.GL_DEPTH_TEST);
+            else GL11.glDisable(GL11.GL_DEPTH_TEST);
+            if (alphaWasEnabled) GL11.glEnable(GL11.GL_ALPHA_TEST);
+            else GL11.glDisable(GL11.GL_ALPHA_TEST);
         }
     }
 

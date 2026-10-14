@@ -22,9 +22,9 @@ This repository currently contains an experimental Forge 1.8.9 mod project with 
 - Entity hooks: Implemented (opt-in living-entity distance culling with vanilla fallback default)
 - Particle hooks: Implemented (opt-in particle throttling floor with automatic restore fallback)
 - Cloud hooks: Implemented (opt-in conservative cloud layer renderer; only when vanilla clouds are disabled)
-- Optional post-effect pipeline: Implemented (capability-gated LWJGL2 framebuffer composite with self-disable fallback)
+- Optional post-effect pipeline: Implemented (capability-gated LWJGL2 framebuffer composite with configurable tint/alpha and self-disable fallback)
 - Item/block-entity hooks: Implemented (fallback-only compatibility toggles; no custom replacement renderers in this pass)
-- Weather hooks: Implemented (fallback-only compatibility toggle; no custom rain/snow renderer in this pass)
+- Weather hooks: Implemented (opt-in conservative rain/snow renderer with automatic fallback to vanilla/custom weather renderers)
 - Configuration/settings: Implemented (Forge config, disabled by default)
 - Compatibility modules: Implemented (texture/lighting/GPU/effects interfaces)
 - Deterministic pure-Java helper tests: Implemented (`MeshMathTest`)
@@ -32,9 +32,9 @@ This repository currently contains an experimental Forge 1.8.9 mod project with 
 - Item optimization: Fallback-only (safe compatibility toggle; no item-render replacement path implemented)
 - Particle optimization: Partial (particle setting throttle only; no particle-system rewrite)
 - Cloud optimization: Partial (conservative optional cloud layer; not full vanilla cloud parity)
-- Weather optimization: Fallback-only (no safe rain/snow replacement path wired in this pass)
+- Weather optimization: Partial (opt-in weather renderer replacement with conservative distance/frustum filtering and compatibility fallbacks)
 - Block-entity optimization: Fallback-only (no TESR replacement to preserve custom renderer compatibility)
-- Post-processing pipeline: Partial (framebuffer composite path only; no shader chain in Forge 1.8.9 baseline)
+- Post-processing pipeline: Partial (framebuffer composite/tint path only; no shader chain in Forge 1.8.9 baseline)
 - Full upstream parity: Blocked by target-platform differences and rendering abstraction gaps
 
 ## Build results

@@ -12,6 +12,7 @@ import org.lwjgl.opengl.GL11;
 
 public final class OptionalRenderHooks {
     private final Minecraft mc = Minecraft.getMinecraft();
+    private final WeatherRendererController weatherController = new WeatherRendererController();
     private Integer originalParticleSetting;
 
     public void onBeforeTerrainRender() {
@@ -22,6 +23,7 @@ public final class OptionalRenderHooks {
     }
 
     public void onClientTick() {
+        weatherController.onClientTick();
         if (mc == null || mc.gameSettings == null) return;
 
         if (!ArgentumForge.ENABLE_EXPERIMENTAL_CHUNK_RENDERER || !ArgentumConfig.enableParticleHooks) {
