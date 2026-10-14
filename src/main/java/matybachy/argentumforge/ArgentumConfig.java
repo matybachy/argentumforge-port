@@ -28,6 +28,8 @@ public final class ArgentumConfig {
     public static boolean enableEntityHooks = false;
     public static boolean enableEntityDistanceCulling = false;
     public static int entityCullingDistance = 96;
+    public static boolean enableNonLivingEntityCulling = false;
+    public static int nonLivingEntityCullingDistance = 64;
     public static boolean enableItemHooks = false;
     public static boolean enableItemDistanceCulling = false;
     public static int itemCullingDistance = 96;
@@ -72,6 +74,8 @@ public final class ArgentumConfig {
             enableEntityHooks = cfg.getBoolean("enableEntityHooks", CAT_FEATURES, false, "Enable opt-in entity render-event hooks with vanilla fallback.");
             enableEntityDistanceCulling = cfg.getBoolean("enableEntityDistanceCulling", CAT_FEATURES, false, "Enable opt-in distance culling for living-entity renders.");
             entityCullingDistance = cfg.getInt("entityCullingDistance", CAT_FEATURES, 96, 16, 512, "Maximum render distance in blocks when entity distance culling is enabled.");
+            enableNonLivingEntityCulling = cfg.getBoolean("enableNonLivingEntityCulling", CAT_FEATURES, false, "Skip vanilla arrow, XP orb, snowball, egg, ender pearl and XP bottle renderers beyond nonLivingEntityCullingDistance (requires enableEntityHooks). Named or ridden entities are never skipped.");
+            nonLivingEntityCullingDistance = cfg.getInt("nonLivingEntityCullingDistance", CAT_FEATURES, 64, 16, 512, "Distance in blocks for non-living entity culling.");
             enableItemHooks = cfg.getBoolean("enableItemHooks", CAT_FEATURES, false, "Enable opt-in dropped-item render-distance adjustment.");
             enableItemDistanceCulling = cfg.getBoolean("enableItemDistanceCulling", CAT_FEATURES, false, "Enable opt-in distance culling for dropped item entities.");
             itemCullingDistance = cfg.getInt("itemCullingDistance", CAT_FEATURES, 96, 16, 512, "Maximum render distance in blocks when dropped-item distance culling is enabled.");

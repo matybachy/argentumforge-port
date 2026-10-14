@@ -2,6 +2,7 @@ package matybachy.argentumforge;
 
 import matybachy.argentumforge.client.ArgentumRenderer;
 import matybachy.argentumforge.client.blockentity.BlockEntityDistanceCulling;
+import matybachy.argentumforge.client.entity.NonLivingEntityCulling;
 import matybachy.argentumforge.client.mesh.ClientWorldHooks;
 import matybachy.argentumforge.client.mesh.ChunkMeshManager;
 import matybachy.argentumforge.client.mesh.RendererValidation;
@@ -56,6 +57,7 @@ public class ClientProxy extends CommonProxy {
         }
         IntegratedTerrain.onClientTick(Minecraft.getMinecraft());
         BlockEntityDistanceCulling.onClientTick();
+        NonLivingEntityCulling.onClientTick();
     }
 
     @SubscribeEvent

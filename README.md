@@ -14,6 +14,7 @@ Experimental Forge 1.8.9 port of Argentum rendering ideas, built as a separate m
 - `terrainMode=overlay`: legacy late `RenderWorldLastEvent` overlay (can duplicate vanilla terrain; kept for comparison only). Its meshers now use primitive float buffers
 - Optional distance culling for the vanilla chest, ender chest, sign, skull, banner, mob spawner and enchantment table renderers
 - Optional living-entity distance culling with compatibility guards (cached class-eligibility checks)
+- Optional non-living entity distance culling (`enableNonLivingEntityCulling`) for the exact vanilla arrow, XP orb, snowball, egg, ender pearl and XP bottle renderers. The vanilla renderer instances are wrapped and restored when the option is disabled
 - Optional dropped-item distance adjustment and particle-setting throttling with restoration behavior
 - Optional cloud layer renderer, active only when vanilla clouds are off and there is no custom sky renderer
 - Optional weather approximation with per-tick cached biome/precipitation columns (rain or snow pass skipped when no column needs it), distance and forward filtering, and provider fallback
@@ -44,7 +45,7 @@ The generated Forge config controls renderer behavior:
 - Compatibility: `disableExperimentalRendererWithFeatherOpt`, `disableOptionalEffectsWithFeatherOpt`
 - Optional effects (overlay only): `enableOptionalEffects`, `optionalEffectsCompositeAlpha`, `optionalEffectsTintRed`, `optionalEffectsTintGreen`, `optionalEffectsTintBlue`
 - Block entities: `enableBlockEntityHooks`, `enableBlockEntityDistanceCulling`, `blockEntityCullingDistance`
-- Entities: `enableEntityHooks`, `enableEntityDistanceCulling`, `entityCullingDistance`
+- Entities: `enableEntityHooks`, `enableEntityDistanceCulling`, `entityCullingDistance`, `enableNonLivingEntityCulling`, `nonLivingEntityCullingDistance`
 - Dropped items: `enableItemHooks`, `enableItemDistanceCulling`, `itemCullingDistance`
 - Particles: `enableParticleHooks`, `particleThrottleSetting`
 - Clouds: `enableCloudHooks`, `enableCloudRenderer`, `cloudRenderRadiusBlocks`
