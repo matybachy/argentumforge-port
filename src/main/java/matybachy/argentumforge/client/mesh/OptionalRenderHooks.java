@@ -13,6 +13,7 @@ import net.minecraftforge.client.event.RenderLivingEvent;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 import org.lwjgl.opengl.GL11;
 
+import java.util.IdentityHashMap;
 import java.util.Map;
 import java.util.WeakHashMap;
 
@@ -24,6 +25,9 @@ public final class OptionalRenderHooks {
     private Integer originalParticleSetting;
     private int lastAppliedParticleSetting = -1;
     private WorldClient itemWorld;
+    // Render-thread caches: entity/renderer classes never change package at runtime.
+    private final Map<Class<?>, Boolean> vanillaEntityClasses = new IdentityHashMap<Class<?>, Boolean>();
+    private final Map<Class<?>, Boolean> vanillaRendererClasses = new IdentityHashMap<Class<?>, Boolean>();
 
     public void onBeforeTerrainRender() {
     }
@@ -85,13 +89,13 @@ public final class OptionalRenderHooks {
         if (event == null || event.entity == null || event.renderer == null) return;
         Entity view = mc != null ? mc.getRenderViewEntity() : null;
         if (!(event.entity instanceof EntityLivingBase) || view == null) return;
-        if (!event.entity.getClass().getName().startsWith("net.minecraft.entity.")) return;
+        if (!isInPackage(vanillaEntityClasses, event.entity.getClass(), "net.minecraft.entity.")) return;
         if (RenderOptimizationMath.shouldSkipEntityDistanceCulling(
                 event.entity == view,
                 event.entity.hasCustomName(),
                 event.entity.ridingEntity != null,
                 event.entity.riddenByEntity != null,
-                event.renderer.getClass().getName().startsWith("net.minecraft.client.renderer.entity.")
+                isInPackage(vanillaRendererClasses, event.renderer.getClass(), "net.minecraft.client.renderer.entity.")
         )) {
             return;
         }
@@ -114,6 +118,20 @@ public final class OptionalRenderHooks {
         )) {
             event.setCanceled(true);
         }
+    }
+
+    private static boolean isInPackage(Map<Class<?>, Boolean> cache, Class<?> type, String prefix) {
+        Boolean cached = cache.get(type);
+        if (cached == null) {
+            cached = Boolean.valueOf(type.getName().startsWith(prefix));
+            cache.put(type, cached);
+        }
+        return cached.booleanValue();
+    }
+
+    /** True when the late RenderWorldLastEvent pass has optional work besides the legacy overlay. */
+    public boolean hasLateRenderWork() {
+        return canUseCloudFallbackRenderer();
     }
 
     private void renderCloudLayer() {
