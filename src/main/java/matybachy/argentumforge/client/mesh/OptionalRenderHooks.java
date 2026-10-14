@@ -5,6 +5,7 @@ import matybachy.argentumforge.ArgentumForge;
 import net.minecraft.client.Minecraft;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.item.EntityItem;
+import net.minecraft.entity.EntityLiving;
 import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.util.MathHelper;
 import net.minecraftforge.client.event.RenderLivingEvent;
@@ -25,7 +26,7 @@ public final class OptionalRenderHooks {
     }
 
     public void onAfterTerrainRender() {
-        if (useCloudHooks() && ArgentumConfig.enableCloudRenderer) renderCloudLayer();
+        if (canUseCloudFallbackRenderer()) renderCloudLayer();
     }
 
     public void onClientTick() {
@@ -85,6 +86,17 @@ public final class OptionalRenderHooks {
             return;
         }
         if (event.entity.ticksExisted < 1) return;
+        if (event.entity.ridingEntity != null || event.entity.riddenByEntity != null) return;
+
+        boolean hasCustomName = event.entity.hasCustomName();
+        boolean isLeashed = event.entity instanceof EntityLiving && ((EntityLiving) event.entity).getLeashed();
+        if (!RenderOptimizationMath.shouldUseEntityDistanceCulling(
+                ArgentumForge.ENABLE_EXPERIMENTAL_CHUNK_RENDERER,
+                ArgentumConfig.enableEntityHooks,
+                ArgentumConfig.enableEntityDistanceCulling,
+                hasCustomName,
+                isLeashed
+        )) return;
 
         if (RenderOptimizationMath.shouldCullByDistance(
                 view.getDistanceSqToEntity(event.entity),
@@ -180,29 +192,50 @@ public final class OptionalRenderHooks {
     }
 
     public boolean useEntityHooks() {
-        return ArgentumConfig.enableEntityHooks;
+        return ArgentumForge.ENABLE_EXPERIMENTAL_CHUNK_RENDERER && ArgentumConfig.enableEntityHooks;
     }
 
     public boolean useWeatherHooks() {
-        return ArgentumConfig.enableWeatherHooks;
+        return ArgentumForge.ENABLE_EXPERIMENTAL_CHUNK_RENDERER && ArgentumConfig.enableWeatherHooks;
     }
 
     public boolean useCloudHooks() {
-        return ArgentumConfig.enableCloudHooks;
+        return canUseCloudFallbackRenderer();
     }
 
     public boolean useItemHooks() {
-        return ArgentumConfig.enableItemHooks;
+        return ArgentumForge.ENABLE_EXPERIMENTAL_CHUNK_RENDERER && ArgentumConfig.enableItemHooks;
     }
 
     public boolean useParticleHooks() {
-        return ArgentumConfig.enableParticleHooks;
+        return ArgentumForge.ENABLE_EXPERIMENTAL_CHUNK_RENDERER && ArgentumConfig.enableParticleHooks;
     }
 
     public boolean useBlockEntityHooks() {
         ensureBlockEntityHookSupportChecked();
-        return ArgentumConfig.enableBlockEntityHooks
+        return ArgentumForge.ENABLE_EXPERIMENTAL_CHUNK_RENDERER
+                && ArgentumConfig.enableBlockEntityHooks
                 && (!ArgentumConfig.enableBlockEntityDistanceCulling
                 || RenderOptimizationMath.isBlockEntityOptimizationSupported(blockEntityHookSupported));
+    }
+
+    private boolean canUseCloudFallbackRenderer() {
+        if (mc == null || mc.theWorld == null || mc.gameSettings == null) return false;
+        return RenderOptimizationMath.shouldRunCloudFallback(
+                mc.gameSettings.clouds,
+                ArgentumConfig.enableCloudHooks,
+                ArgentumConfig.enableCloudRenderer,
+                hasCustomSkyRenderer()
+        );
+    }
+
+    private boolean hasCustomSkyRenderer() {
+        if (mc == null || mc.theWorld == null || mc.theWorld.provider == null) return false;
+        try {
+            Object skyRenderer = mc.theWorld.provider.getClass().getMethod("getSkyRenderer").invoke(mc.theWorld.provider);
+            return skyRenderer != null;
+        } catch (Throwable ignored) {
+            return false;
+        }
     }
 }

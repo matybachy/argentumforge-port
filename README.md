@@ -7,15 +7,15 @@ Current scope
 - Independent mod ID: `argentumforge`
 - Client render hook active: `RenderWorldLastEvent`
 - Chunk renderer prototype with solid/cutout/translucent passes and chunk lifecycle hooks
-- Terrain atlas binding via `TextureMap.locationBlocksTexture` with baked-model sprite lookup and missing-sprite fallback
+- Terrain atlas binding via `TextureMap.locationBlocksTexture` with state/model/default-state lookup before missing-sprite fallback
 - World-light sampling + lightweight AO approximation for face/vertex shading (including emissive full-bright fallback and corner-neighbor AO smoothing)
-- Baked-model quad meshing for vanilla block models (including slabs/stairs/fences/panes/doors/trapdoors/rails/etc.) with conservative block-bounds/crossed fallback
+- Baked-model quad meshing for vanilla block models (including slabs/stairs/fences/panes/doors/trapdoors/rails/etc.) with state-aware bounds/collision-shape fallback and conservative cross/box geometry fallback
 - Conservative fluid top/side/bottom geometry with averaged corner heights, same-material internal-face suppression, and translucent layering
 - Conservative chunk visibility culling (radius + directional backface rejection) and chunk VBO buffer reuse
 - Optional living-entity distance culling (opt-in, conservative compatibility checks, vanilla-compatible defaults)
 - Optional dropped-item distance culling and particle throttling (opt-in, conservative, vanilla-compatible defaults)
 - Optional conservative cloud layer renderer (opt-in, only active when vanilla clouds are disabled)
-- Optional capability-gated framebuffer composite pass for LWJGL2-compatible post-processing fallback
+- Optional capability-gated framebuffer composite pass for LWJGL2-compatible post-processing fallback with thread/runtime safety checks
 - Vanilla fallback preserved; experimental renderer is disabled by default and config-driven
 
 Repository status
@@ -42,7 +42,7 @@ Known limits
 - Lighting/AO and model support are conservative Forge 1.8.9 approximations.
 - Model path still uses conservative per-face light/AO approximation and does not fully reproduce vanilla block-model AO weighting.
 - Block-entity optimization remains blocked/fallback-only in this pass because Forge 1.8.9 does not expose a safe generic TESR pre-render hook for conservative distance culling without replacing renderers.
-- Optional cloud rendering intentionally uses a conservative flat cloud layer and only activates when vanilla cloud rendering is disabled in game settings to avoid double-rendering.
+- Optional cloud rendering intentionally uses a conservative flat cloud layer and only activates when vanilla clouds are disabled and no custom sky renderer is present to avoid double-rendering/conflicts.
 - Optional post-processing uses a capability-gated framebuffer composite pass and disables itself automatically on allocation/composite failures.
 - Feature status (requested areas):
   - Entity rendering optimization: **Partial** (living-entity distance culling with conservative compatibility guards and vanilla fallback default)

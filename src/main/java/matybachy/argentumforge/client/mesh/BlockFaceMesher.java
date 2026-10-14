@@ -16,6 +16,7 @@ import net.minecraft.client.renderer.BlockRendererDispatcher;
 import net.minecraft.client.renderer.block.model.BakedQuad;
 import net.minecraft.client.resources.model.IBakedModel;
 import net.minecraft.init.Blocks;
+import net.minecraft.util.AxisAlignedBB;
 import net.minecraft.util.BlockPos;
 import net.minecraft.util.EnumFacing;
 import net.minecraft.world.World;
@@ -69,6 +70,12 @@ public final class BlockFaceMesher {
     }
 
     private boolean isCrossModel(Block block) {
+        if (block != null) {
+            try {
+                if (block.getRenderType() == 1) return true;
+            } catch (Throwable ignored) {
+            }
+        }
         return block instanceof BlockBush
                 || block instanceof BlockCrops
                 || block instanceof BlockReed
@@ -151,33 +158,48 @@ public final class BlockFaceMesher {
     }
 
     private void emitBox(World world, List<Float> vertices, BlockPos pos, IBlockState state, Block block, TextureLookup.Pass pass) {
-        float minX = 0.0f;
-        float minY = 0.0f;
-        float minZ = 0.0f;
-        float maxX = 1.0f;
-        float maxY = 1.0f;
-        float maxZ = 1.0f;
-
-        if (ArgentumConfig.enableModelFallback) {
-            try {
-                block.setBlockBoundsBasedOnState(world, pos);
-                minX = (float) block.getBlockBoundsMinX();
-                minY = (float) block.getBlockBoundsMinY();
-                minZ = (float) block.getBlockBoundsMinZ();
-                maxX = (float) block.getBlockBoundsMaxX();
-                maxY = (float) block.getBlockBoundsMaxY();
-                maxZ = (float) block.getBlockBoundsMaxZ();
-            } catch (Throwable ignored) {
-                minX = minY = minZ = 0.0f;
-                maxX = maxY = maxZ = 1.0f;
-            }
-        }
+        Bounds bounds = resolveFallbackBounds(world, pos, state, block);
+        float minX = bounds.minX;
+        float minY = bounds.minY;
+        float minZ = bounds.minZ;
+        float maxX = bounds.maxX;
+        float maxY = bounds.maxY;
+        float maxZ = bounds.maxZ;
 
         for (EnumFacing face : EnumFacing.values()) {
             if (isFaceVisible(world, pos, block, face)) {
                 emitFace(world, vertices, pos, state, block, face, pass, minX, minY, minZ, maxX, maxY, maxZ);
             }
         }
+    }
+
+    private Bounds resolveFallbackBounds(World world, BlockPos pos, IBlockState state, Block block) {
+        if (!ArgentumConfig.enableModelFallback || block == null) return Bounds.full();
+
+        Bounds bounds = null;
+        try {
+            block.setBlockBoundsBasedOnState(world, pos);
+            bounds = Bounds.fromBlockBounds(block);
+        } catch (Throwable ignored) {
+            bounds = null;
+        }
+        if (bounds != null) return bounds;
+
+        try {
+            AxisAlignedBB collision = block.getCollisionBoundingBox(world, pos, state);
+            bounds = Bounds.fromWorldAabb(collision, pos);
+        } catch (Throwable ignored) {
+            bounds = null;
+        }
+        if (bounds != null) return bounds;
+
+        try {
+            AxisAlignedBB selected = block.getSelectedBoundingBox(world, pos);
+            bounds = Bounds.fromWorldAabb(selected, pos);
+        } catch (Throwable ignored) {
+            bounds = null;
+        }
+        return bounds != null ? bounds : Bounds.full();
     }
 
     private void emitCross(World world, List<Float> vertices, BlockPos pos, IBlockState state, Block block, TextureLookup.Pass pass) {
@@ -416,5 +438,62 @@ public final class BlockFaceMesher {
         public float[] getSolidVertices() { return solidVertices; }
         public float[] getCutoutVertices() { return cutoutVertices; }
         public float[] getTranslucentVertices() { return translucentVertices; }
+    }
+
+    private static final class Bounds {
+        private final float minX;
+        private final float minY;
+        private final float minZ;
+        private final float maxX;
+        private final float maxY;
+        private final float maxZ;
+
+        private Bounds(float minX, float minY, float minZ, float maxX, float maxY, float maxZ) {
+            this.minX = minX;
+            this.minY = minY;
+            this.minZ = minZ;
+            this.maxX = maxX;
+            this.maxY = maxY;
+            this.maxZ = maxZ;
+        }
+
+        private static Bounds full() {
+            return new Bounds(0.0f, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f);
+        }
+
+        private static Bounds fromBlockBounds(Block block) {
+            if (block == null) return null;
+            return create(
+                    (float) block.getBlockBoundsMinX(),
+                    (float) block.getBlockBoundsMinY(),
+                    (float) block.getBlockBoundsMinZ(),
+                    (float) block.getBlockBoundsMaxX(),
+                    (float) block.getBlockBoundsMaxY(),
+                    (float) block.getBlockBoundsMaxZ()
+            );
+        }
+
+        private static Bounds fromWorldAabb(AxisAlignedBB box, BlockPos pos) {
+            if (box == null || pos == null) return null;
+            return create(
+                    (float) (box.minX - pos.getX()),
+                    (float) (box.minY - pos.getY()),
+                    (float) (box.minZ - pos.getZ()),
+                    (float) (box.maxX - pos.getX()),
+                    (float) (box.maxY - pos.getY()),
+                    (float) (box.maxZ - pos.getZ())
+            );
+        }
+
+        private static Bounds create(float minX, float minY, float minZ, float maxX, float maxY, float maxZ) {
+            float safeMinX = MeshMath.clamp01(minX);
+            float safeMinY = MeshMath.clamp01(minY);
+            float safeMinZ = MeshMath.clamp01(minZ);
+            float safeMaxX = MeshMath.clamp01(maxX);
+            float safeMaxY = MeshMath.clamp01(maxY);
+            float safeMaxZ = MeshMath.clamp01(maxZ);
+            if (safeMaxX <= safeMinX || safeMaxY <= safeMinY || safeMaxZ <= safeMinZ) return null;
+            return new Bounds(safeMinX, safeMinY, safeMinZ, safeMaxX, safeMaxY, safeMaxZ);
+        }
     }
 }

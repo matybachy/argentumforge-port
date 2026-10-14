@@ -37,4 +37,17 @@ public final class RenderOptimizationMath {
     public static boolean isBlockEntityOptimizationSupported(boolean hasBlockEntityRenderHook) {
         return hasBlockEntityRenderHook;
     }
+
+    public static boolean shouldRunCloudFallback(int cloudsSetting, boolean cloudHooksEnabled, boolean cloudRendererEnabled, boolean hasCustomSkyRenderer) {
+        return cloudHooksEnabled && cloudRendererEnabled && cloudsSetting == 0 && !hasCustomSkyRenderer;
+    }
+
+    public static boolean shouldUseEntityDistanceCulling(boolean rendererEnabled, boolean entityHooksEnabled,
+                                                         boolean distanceCullingEnabled, boolean hasCustomName, boolean isLeashed) {
+        return rendererEnabled && entityHooksEnabled && distanceCullingEnabled && !hasCustomName && !isLeashed;
+    }
+
+    public static boolean shouldRunOptionalEffects(boolean configEnabled, boolean framebufferEnabled, boolean disabledByFailure, boolean onClientThread) {
+        return configEnabled && framebufferEnabled && !disabledByFailure && onClientThread;
+    }
 }

@@ -27,8 +27,8 @@ This repository currently includes:
 - Java 8-compatible Gradle build setup
 - client hook via RenderWorldLastEvent
 - a VBO-based chunk renderer with solid/cutout/translucent passes
-- texture-atlas binding (`TextureMap.locationBlocksTexture`) and baked-model sprite UV lookup with missing-sprite fallback
-- baked-model quad decoding for block geometry, with conservative fallback geometry if model access/decoding fails
+- texture-atlas binding (`TextureMap.locationBlocksTexture`) and baked-model/state/default-state sprite lookup before missing-sprite fallback
+- baked-model quad decoding for block geometry, with state-aware bounds/collision-shape fallback and conservative geometry if model access/decoding fails
 - world-light + lightweight AO sampling for per-vertex brightness approximation (including emissive full-bright fallback and corner-neighbor AO smoothing)
 - conservative model fallback geometry (block bounds, crossed quads for plant-like blocks, fluid corner heights + side/bottom faces)
 - prioritized, bounded chunk rebuild scheduling with world/chunk/block invalidation hooks (including MultiPlace updates and edge-neighbor dirtying)
@@ -36,8 +36,8 @@ This repository currently includes:
 - reusable chunk VBO allocation strategy that updates in-place when capacity permits
 - optional living-entity distance culling hooks with compatibility guards (opt-in and disabled by default)
 - optional dropped-item distance culling and particle throttling hooks (opt-in and disabled by default)
-- optional conservative cloud layer rendering (opt-in; active only when vanilla clouds are disabled to avoid double rendering)
-- optional capability-gated framebuffer composite effect pipeline with failure self-disable fallback
+- optional conservative cloud layer rendering (opt-in; active only when vanilla clouds are disabled and no custom sky renderer is present)
+- optional capability-gated framebuffer composite effect pipeline with failure self-disable fallback and client-thread gating (no worker-thread GL calls)
 - compatibility interfaces for texture lookup, lighting, GPU buffers, and optional effects
 
 This is intentionally a staged prototype and not a full Argentu m-equivalent renderer yet.
