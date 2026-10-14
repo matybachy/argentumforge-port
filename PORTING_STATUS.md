@@ -21,7 +21,7 @@ This repository targets Minecraft Forge 1.8.9, Forge 11.15.1.2318, Java 8, and L
 | Block entities | Not implemented | There is no connected block-entity optimization. The old capability probe did not find a Forge 1.8.9 render event and has been removed. Renderers remain on vanilla behavior. |
 | Weather | Connected, opt-in approximation | The provider renderer is installed only if no other renderer is present, uses biome and precipitation-height checks, and is removed on disable/world changes or render failure. Rain/snow visuals and visibility are not vanilla-equivalent. |
 | Clouds | Connected, opt-in fallback | A flat translucent grid is drawn only with vanilla clouds disabled and no custom sky renderer. It does not reproduce vanilla cloud animation or geometry. |
-| Post effects | Connected, opt-in overlay | The framebuffer pass wraps only the late custom pass. It does not capture the complete vanilla world frame or implement a shader chain. FeatherOpt presence disables it by default. |
+| Post effects | Connected, opt-in overlay | The framebuffer pass wraps only the late custom pass. It does not capture the complete vanilla world frame or implement a shader chain. The optional effects path is independently opt-in; its FeatherOpt compatibility gate defaults off because source inspection found no concrete conflict. |
 | Items, fonts, labels, GUI/HUD, enchantment glint | Not implemented | No connected optimization hooks or caches are present for these paths. |
 | FeatherOpt coexistence | Source-level precautions only | ArgentumForge has no FeatherOpt dependency and does not bundle its source. Renderer/framebuffer interaction has not been runtime-verified. |
 
@@ -58,3 +58,11 @@ Background building is also not implemented: current meshing reads mutable `Worl
 
 No Gradle command, Java compilation, unit/integration test, Minecraft launch, or runtime compatibility test was performed. Source-level review is not evidence that this code compiles or renders correctly. FeatherOpt-only and FeatherOpt-plus-OptiFine compatibility are unverified.
 
+## FeatherOpt compatibility review (static only)
+
+- ArgentumForge and FeatherOpt remain separate and independently optional artifacts.
+- FeatherOpt detection is runtime-only; there is no bundled FeatherOpt source or required dependency.
+- Source review reported no confirmed overlapping transformation that by itself requires disabling all ArgentumForge rendering features.
+- `disableExperimentalRendererWithFeatherOpt` defaults to false and, when enabled, is intended to suppress only the experimental terrain overlay and its mesh rebuild tick.
+- `disableOptionalEffectsWithFeatherOpt` also defaults to false. The effect pipeline is not disabled merely because FeatherOpt is present.
+- These are source-level decisions, not verified runtime compatibility. No build, compilation or Minecraft test was performed.
