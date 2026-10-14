@@ -8,7 +8,7 @@ Experimental Forge 1.8.9 port of Argentum, built as a separate mod project in th
 - Late custom terrain overlay through `RenderWorldLastEvent`; vanilla terrain compilation and drawing remain active
 - Experimental solid/cutout/translucent mesh prototype with chunk lifecycle hooks; it is not a replacement terrain renderer
 - Terrain atlas binding, baked-model quad extraction, approximate fluid geometry and lighting/AO, and VBO reuse
-- Chunk-radius and horizontal-direction visibility heuristic; there is no camera-plane frustum or occlusion culling
+- Chunk-radius and Minecraft 1.8.9 camera-plane frustum checks for the overlay; there is no section-visibility graph or occlusion culling
 - Optional living-entity distance culling with compatibility guards
 - Optional dropped-item distance adjustment and particle throttling with restoration behavior
 - Optional cloud layer renderer, active only when vanilla clouds are disabled and no custom sky renderer is active
@@ -64,3 +64,4 @@ Optional features use conservative settings and remain disabled by default unles
 - Post-processing is a framebuffer composite/tint pass, not a modern shader chain.
 - FeatherOpt compatibility is guarded defensively, but the white-screen issue remains unverified without real-client testing.
 - Build, visual parity, compatibility, and performance require validation in a Java 8 / Forge 1.8.9 environment with a real client.
+

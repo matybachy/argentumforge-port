@@ -1,57 +1,58 @@
 package matybachy.argentumforge.client.mesh;
 
+import net.minecraft.client.renderer.culling.Frustum;
 import net.minecraft.entity.Entity;
 
-/**
- * Lightweight chunk visibility culling used by the terrain prototype.
- * This is intentionally simple: it culls chunks beyond a radius around the camera.
- * This is a stepping stone toward real frustum culling in a full Forge 1.8.9 renderer.
- */
+/** Conservative visibility checks for the experimental chunk-mesh overlay. */
 public final class SimpleFrustumCuller {
-    private static final double DIRECTIONAL_CULL_DISTANCE_BLOCKS = 48.0D;
-    private static final double BACKFACE_DOT_THRESHOLD = -0.35D;
     private final int maxDistanceChunks;
+    private double cameraX;
+    private double cameraZ;
+    private Frustum cameraFrustum;
 
     public SimpleFrustumCuller(int maxDistanceChunks) {
-        this.maxDistanceChunks = maxDistanceChunks;
+        this.maxDistanceChunks = Math.max(1, maxDistanceChunks);
+    }
+
+    /**
+     * Captures the active 1.8.9 camera planes before the overlay applies its
+     * world-space camera translation. If the planes cannot be read, rendering
+     * fails open and the distance limit remains the only culling condition.
+     */
+    public void prepare(Entity camera, double cameraX, double cameraY, double cameraZ) {
+        this.cameraX = cameraX;
+        this.cameraZ = cameraZ;
+        cameraFrustum = null;
+        if (camera == null) return;
+
+        try {
+            Frustum frustum = new Frustum();
+            frustum.setPosition(cameraX, cameraY, cameraZ);
+            cameraFrustum = frustum;
+        } catch (RuntimeException ignored) {
+            // Keep the conservative radius fallback if the renderer is unavailable.
+        }
     }
 
     public boolean shouldRenderChunk(Entity camera, int chunkX, int chunkZ) {
-        if (camera == null) {
+        if (camera == null) return false;
+        double x = cameraFrustum == null ? camera.posX : cameraX;
+        double z = cameraFrustum == null ? camera.posZ : cameraZ;
+        int cameraChunkX = ChunkCoord.chunkFromBlock(x);
+        int cameraChunkZ = ChunkCoord.chunkFromBlock(z);
+        if (!ChunkCoord.isWithinRadius(cameraChunkX, cameraChunkZ, chunkX, chunkZ, maxDistanceChunks)) {
             return false;
         }
 
-        int camChunkX = ChunkCoord.chunkFromBlock(camera.posX);
-        int camChunkZ = ChunkCoord.chunkFromBlock(camera.posZ);
-        if (!shouldRenderChunk(camChunkX, camChunkZ, chunkX, chunkZ)) {
-            return false;
-        }
-
-        return passesDirectionalCull(camera.posX, camera.posZ, camera.rotationYaw, chunkX, chunkZ);
-    }
-
-    boolean shouldRenderChunk(int cameraChunkX, int cameraChunkZ, int chunkX, int chunkZ) {
-        return ChunkCoord.isWithinRadius(cameraChunkX, cameraChunkZ, chunkX, chunkZ, maxDistanceChunks);
-    }
-
-    boolean passesDirectionalCull(double cameraX, double cameraZ, float yawDegrees, int chunkX, int chunkZ) {
-        double centerX = (chunkX << 4) + 8.0D;
-        double centerZ = (chunkZ << 4) + 8.0D;
-        double dx = centerX - cameraX;
-        double dz = centerZ - cameraZ;
-        double distanceSq = dx * dx + dz * dz;
-        if (distanceSq <= DIRECTIONAL_CULL_DISTANCE_BLOCKS * DIRECTIONAL_CULL_DISTANCE_BLOCKS) {
+        if (cameraFrustum == null) return true;
+        double minX = (double) chunkX * 16.0D;
+        double minZ = (double) chunkZ * 16.0D;
+        try {
+            return cameraFrustum.isBoxInFrustum(minX, 0.0D, minZ,
+                    minX + 16.0D, 256.0D, minZ + 16.0D);
+        } catch (RuntimeException ignored) {
             return true;
         }
-
-        double radians = Math.toRadians(yawDegrees);
-        double forwardX = -Math.sin(radians);
-        double forwardZ = Math.cos(radians);
-        double length = Math.sqrt(distanceSq);
-        if (length <= 0.0001D) {
-            return true;
-        }
-        double dot = (dx * forwardX + dz * forwardZ) / length;
-        return dot >= BACKFACE_DOT_THRESHOLD;
     }
 }
+

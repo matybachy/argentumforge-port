@@ -16,7 +16,7 @@ At draw time, `ArgentumRenderer.onRenderWorldLast` binds the block atlas and dra
 
 The mesh builder uses 1.8.9 baked-model quads when available, but bypasses the normal Forge block-model render pipeline. Its fallback bounds/cross/fluid generation, per-vertex brightness and AO, biome tint handling, layer classification, and translucent sorting do not reproduce all vanilla/modded rendering behavior. The vertex record contains position, atlas UV, and RGBA only; it does not carry the vanilla lightmap coordinates. Animated atlas textures can keep their UVs, but resource atlas restitch invalidates and discards all meshes so they are rebuilt.
 
-`SimpleFrustumCuller` is a distance-plus-horizontal-direction heuristic. It does not use the active camera planes or block-visibility graph. Translucent geometry is sorted only by chunk center; quads within a chunk are not sorted.
+Before applying the overlay camera translation, `ArgentumRenderer` asks `SimpleFrustumCuller` to capture Forge 1.8.9's current `Frustum`. The culler checks each world-space 16-by-256-by-16 chunk bound against those camera planes and also applies the configured radius cap. If plane capture or testing throws, it fails open to radius-only visibility. This culls only the overlay's draw calls; vanilla chunk visibility is unchanged, and there is no section-visibility graph or occlusion query. Translucent geometry is sorted only by chunk center; quads within a chunk are not sorted.
 
 ## Lifecycle and state safety
 
@@ -54,3 +54,4 @@ Exact block render semantics, lightmap/AO parity, biome tint parity, cutout/tran
 ## Validation record
 
 No Gradle or wrapper command was run. No Java compilation, unit or integration test, Minecraft launch, or FeatherOpt runtime check was performed. Only source inspection and diff review were used; compilation and visual behavior are unverified.
+

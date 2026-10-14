@@ -13,7 +13,7 @@ This repository targets Minecraft Forge 1.8.9, Forge 11.15.1.2318, Java 8, and L
 | Block models | Partial | Baked quads are read directly, with approximate fallback boxes and crosses. This does not follow Forge's full block-renderer pipeline for every modded block. |
 | Fluids and lighting | Partial | Fluid geometry, biome tint, block/sky light, and ambient occlusion are approximations. The vertex format has no lightmap coordinates. |
 | Mesh scheduling | Synchronous, bounded | Rebuilds run on the client tick and touch mutable world state. The radius, per-tick budget, retry delay, loaded-chunk filter, dirty queue pruning, and VBO cleanup are managed. There are no worker threads or immutable chunk snapshots. |
-| Chunk visibility | Approximate distance filter | A chunk-radius and horizontal yaw heuristic is used. There is no camera-plane frustum test, section visibility graph, or occlusion query. |
+| Chunk visibility | Connected to overlay | Uses Forge 1.8.9's `Frustum` with world-space chunk bounds, plus a configurable chunk-radius cap. If frustum capture fails, it fails open to the radius filter. It does not control vanilla chunk visibility and has no section visibility graph or occlusion query. |
 | Invalidation | Partial | Chunk load/unload, world changes, texture-atlas restitch, and Forge block place/break/multi-place events invalidate meshes. Changes made by arbitrary mod code without these events are not observed. |
 | Entity distance culling | Connected, opt-in | `RenderLivingEvent.Pre` can cancel distant vanilla living-entity renders. It skips custom renderers, custom-named, mounted, riding, and leashed entities. It is disabled by default. |
 | Dropped items | Connected, opt-in | `EntityItem.renderDistanceWeight` is adjusted past the configured threshold and restored. Minecraft's own range calculation still determines the effective cutoff; no item model cache or draw batching is present. |
@@ -37,6 +37,7 @@ This repository targets Minecraft Forge 1.8.9, Forge 11.15.1.2318, Java 8, and L
 - Dispose meshes after block-atlas restitch so stored UVs are rebuilt for the new atlas.
 - Restore VBO bindings and client vertex-array state around upload/draw calls; include texture/current-color state in the renderer's state stack.
 - Interpolate the camera position for the late-pass transform and remove the second translation from `ChunkMeshManager`.
+- Capture Forge 1.8.9 camera planes before the overlay transform and test full chunk bounds against them; retain a radius-only fail-open path.
 
 These changes improve the safety and lifecycle of the opt-in overlay. They do not turn it into a replacement chunk renderer.
 
@@ -56,3 +57,4 @@ Background building is also not implemented: current meshing reads mutable `Worl
 ## Validation
 
 No Gradle command, Java compilation, unit/integration test, Minecraft launch, or runtime compatibility test was performed. Source-level review is not evidence that this code compiles or renders correctly. FeatherOpt-only and FeatherOpt-plus-OptiFine compatibility are unverified.
+

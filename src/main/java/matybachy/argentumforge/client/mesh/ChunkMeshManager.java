@@ -247,6 +247,11 @@ public final class ChunkMeshManager {
         }
     }
 
+    /** Capture camera planes before ArgentumRenderer applies its overlay translation. */
+    public void prepareVisibility(Entity view, double cameraX, double cameraY, double cameraZ) {
+        if (view != null) culler.prepare(view, cameraX, cameraY, cameraZ);
+    }
+
     private List<Map.Entry<Long, ChunkMesh>> visibleMeshes(Entity view) {
         List<Map.Entry<Long, ChunkMesh>> result = new ArrayList<Map.Entry<Long, ChunkMesh>>();
         for (Map.Entry<Long, ChunkMesh> entry : meshes.entrySet()) {
@@ -292,3 +297,4 @@ public final class ChunkMeshManager {
         }
     }
 }
+
