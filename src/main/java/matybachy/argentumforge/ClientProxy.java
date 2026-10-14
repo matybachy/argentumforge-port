@@ -40,7 +40,11 @@ public class ClientProxy extends CommonProxy {
     public void onClientTick(TickEvent.ClientTickEvent event) {
         if (event.phase == TickEvent.Phase.END) {
             if (renderer != null) renderer.onClientTick();
-            if (ArgentumForge.ENABLE_EXPERIMENTAL_CHUNK_RENDERER) {
+            // Only the experimental terrain mesh rebuild is suppressed when the narrow
+            // terrain compatibility gate is active. Optional hooks (entity, item, particle,
+            // weather, cloud) still run through renderer.onClientTick().
+            if (ArgentumForge.ENABLE_EXPERIMENTAL_CHUNK_RENDERER
+                    && !ArgentumConfig.isExperimentalRendererDisabledByCompatibility()) {
                 meshManager.onTick();
             }
         }

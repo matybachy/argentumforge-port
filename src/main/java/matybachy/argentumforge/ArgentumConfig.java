@@ -10,13 +10,14 @@ public final class ArgentumConfig {
     private static final String CAT_FALLBACKS = "fallbacks";
 
     public static boolean enableExperimentalRenderer = false;
+    public static boolean disableExperimentalRendererWithFeatherOpt = false;
     public static int renderChunkRadius = 3;
     public static int rebuildBudgetPerTick = 2;
     public static boolean enableLightingAo = true;
     public static boolean enableTransparency = true;
     public static boolean enableModelFallback = true;
     public static boolean enableOptionalEffects = false;
-    public static boolean disableOptionalEffectsWithFeatherOpt = true;
+    public static boolean disableOptionalEffectsWithFeatherOpt = false;
     public static boolean enableEntityHooks = false;
     public static boolean enableEntityDistanceCulling = false;
     public static int entityCullingDistance = 96;
@@ -44,12 +45,13 @@ public final class ArgentumConfig {
         try {
             cfg.load();
             enableExperimentalRenderer = cfg.getBoolean("enableExperimentalRenderer", CAT_RENDERER, false, "Enable the experimental late terrain overlay. Vanilla terrain is still rendered; this is not a replacement chunk renderer.");
+            disableExperimentalRendererWithFeatherOpt = cfg.getBoolean("disableExperimentalRendererWithFeatherOpt", CAT_RENDERER, false, "Optionally disable only the experimental terrain renderer and its mesh rebuild tick when FeatherOpt is present; unrelated optional hooks remain controlled by their own settings.");
             renderChunkRadius = cfg.getInt("renderChunkRadius", CAT_RENDERER, 3, 1, 8, "Chunk radius around camera to keep meshed.");
             rebuildBudgetPerTick = cfg.getInt("rebuildBudgetPerTick", CAT_RENDERER, 2, 1, 64, "Maximum chunk rebuilds per client tick.");
             enableLightingAo = cfg.getBoolean("enableLightingAo", CAT_FEATURES, true, "Enable world-light based brightness and lightweight ambient occlusion.");
             enableTransparency = cfg.getBoolean("enableTransparency", CAT_FEATURES, true, "Enable cutout/translucent split and fluid translucency.");
             enableOptionalEffects = cfg.getBoolean("enableOptionalEffects", CAT_FEATURES, false, "Enable optional post/effect pipeline when supported.");
-            disableOptionalEffectsWithFeatherOpt = cfg.getBoolean("disableOptionalEffectsWithFeatherOpt", CAT_FEATURES, true, "Keep the optional framebuffer effect disabled when FeatherOpt is present unless compatibility is verified.");
+            disableOptionalEffectsWithFeatherOpt = cfg.getBoolean("disableOptionalEffectsWithFeatherOpt", CAT_FEATURES, false, "Optionally disable framebuffer effects when a runtime FeatherOpt conflict is observed.");
             enableEntityHooks = cfg.getBoolean("enableEntityHooks", CAT_FEATURES, false, "Enable opt-in entity render-event hooks with vanilla fallback.");
             enableEntityDistanceCulling = cfg.getBoolean("enableEntityDistanceCulling", CAT_FEATURES, false, "Enable opt-in distance culling for living-entity renders.");
             entityCullingDistance = cfg.getInt("entityCullingDistance", CAT_FEATURES, 96, 16, 512, "Maximum render distance in blocks when entity distance culling is enabled.");
@@ -72,6 +74,11 @@ public final class ArgentumConfig {
         } finally {
             if (cfg.hasChanged()) cfg.save();
         }
+    }
+
+    public static boolean isExperimentalRendererDisabledByCompatibility() {
+        return disableExperimentalRendererWithFeatherOpt
+                && CompatibilityEnvironment.isFeatherOptPresent();
     }
 
     public static boolean shouldUseOptionalEffects() {

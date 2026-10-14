@@ -55,3 +55,6 @@ Exact block render semantics, lightmap/AO parity, biome tint parity, cutout/tran
 
 No Gradle or wrapper command was run. No Java compilation, unit or integration test, Minecraft launch, or FeatherOpt runtime check was performed. Only source inspection and diff review were used; compilation and visual behavior are unverified.
 
+## FeatherOpt coexistence review (static only)
+
+FeatherOpt remains a separate optional coremod. ArgentumForge does not bundle it or add a required dependency. The renderer compatibility flag is opt-in and is intended to suppress only the experimental terrain overlay and its mesh rebuild tick. The framebuffer-effects compatibility flag is also opt-in because the inspected source did not establish a concrete conflict. This source review does not prove runtime compatibility.

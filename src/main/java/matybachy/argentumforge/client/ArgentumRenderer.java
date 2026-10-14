@@ -1,5 +1,6 @@
 package matybachy.argentumforge.client;
 
+import matybachy.argentumforge.ArgentumConfig;
 import matybachy.argentumforge.ArgentumForge;
 import matybachy.argentumforge.client.compat.OptionalEffectPipeline;
 import matybachy.argentumforge.client.mesh.ChunkMeshManager;
@@ -27,6 +28,7 @@ public class ArgentumRenderer {
     @SubscribeEvent
     public void onRenderWorldLast(RenderWorldLastEvent event) {
         if (!ArgentumForge.ENABLE_EXPERIMENTAL_CHUNK_RENDERER) return;
+        if (ArgentumConfig.isExperimentalRendererDisabledByCompatibility()) return;
         if (mc.theWorld == null) return;
         Entity view = mc.getRenderViewEntity();
         if (view == null) return;
