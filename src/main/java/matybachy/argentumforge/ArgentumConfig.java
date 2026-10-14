@@ -1,5 +1,6 @@
 package matybachy.argentumforge;
 
+import matybachy.argentumforge.client.compat.CompatibilityEnvironment;
 import net.minecraftforge.common.config.Configuration;
 import net.minecraftforge.fml.common.event.FMLPreInitializationEvent;
 
@@ -15,6 +16,7 @@ public final class ArgentumConfig {
     public static boolean enableTransparency = true;
     public static boolean enableModelFallback = true;
     public static boolean enableOptionalEffects = false;
+    public static boolean disableOptionalEffectsWithFeatherOpt = true;
     public static boolean enableEntityHooks = false;
     public static boolean enableEntityDistanceCulling = false;
     public static int entityCullingDistance = 96;
@@ -46,6 +48,7 @@ public final class ArgentumConfig {
             enableLightingAo = cfg.getBoolean("enableLightingAo", CAT_FEATURES, true, "Enable world-light based brightness and lightweight ambient occlusion.");
             enableTransparency = cfg.getBoolean("enableTransparency", CAT_FEATURES, true, "Enable cutout/translucent split and fluid translucency.");
             enableOptionalEffects = cfg.getBoolean("enableOptionalEffects", CAT_FEATURES, false, "Enable optional post/effect pipeline when supported.");
+            disableOptionalEffectsWithFeatherOpt = cfg.getBoolean("disableOptionalEffectsWithFeatherOpt", CAT_FEATURES, true, "Keep the optional framebuffer effect disabled when FeatherOpt is present unless compatibility is verified.");
             enableEntityHooks = cfg.getBoolean("enableEntityHooks", CAT_FEATURES, false, "Enable optional entity/item hooks with vanilla fallback.");
             enableEntityDistanceCulling = cfg.getBoolean("enableEntityDistanceCulling", CAT_FEATURES, false, "Enable opt-in distance culling for living-entity renders.");
             entityCullingDistance = cfg.getInt("entityCullingDistance", CAT_FEATURES, 96, 16, 512, "Maximum render distance in blocks when entity distance culling is enabled.");
@@ -67,5 +70,10 @@ public final class ArgentumConfig {
         } finally {
             if (cfg.hasChanged()) cfg.save();
         }
+    }
+
+    public static boolean shouldUseOptionalEffects() {
+        return enableOptionalEffects
+                && !(disableOptionalEffectsWithFeatherOpt && CompatibilityEnvironment.isFeatherOptPresent());
     }
 }

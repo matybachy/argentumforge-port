@@ -18,7 +18,7 @@ public final class ForgeOptionalEffectPipeline implements OptionalEffectPipeline
     @Override
     public boolean isSupported() {
         return RenderOptimizationMath.shouldRunOptionalEffects(
-                ArgentumConfig.enableOptionalEffects,
+                ArgentumConfig.shouldUseOptionalEffects(),
                 OpenGlHelper.isFramebufferEnabled(),
                 disabledByFailure,
                 isOnClientThread()
@@ -56,6 +56,10 @@ public final class ForgeOptionalEffectPipeline implements OptionalEffectPipeline
             restoreMainBuffer();
             return;
         }
+
+        // Keep a local reference because restoreMainBuffer() clears the field.
+        // This lets the finally block bind the main framebuffer again after compositing.
+        final Framebuffer targetMainBuffer = mainBuffer;
         boolean depthWasEnabled = GL11.glIsEnabled(GL11.GL_DEPTH_TEST);
         boolean alphaWasEnabled = GL11.glIsEnabled(GL11.GL_ALPHA_TEST);
         try {
@@ -72,7 +76,17 @@ public final class ForgeOptionalEffectPipeline implements OptionalEffectPipeline
         } catch (Throwable ignored) {
             disableDueToFailure();
         } finally {
-            restoreMainBuffer();
+            try {
+                if (targetMainBuffer != null) {
+                    targetMainBuffer.bindFramebuffer(true);
+                } else {
+                    restoreMainBuffer();
+                }
+            } catch (Throwable ignored) {
+                // The outer renderer still restores its GL attribute stack.
+            } finally {
+                mainBuffer = null;
+            }
             GL11.glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
             GL11.glDepthMask(true);
             if (depthWasEnabled) GL11.glEnable(GL11.GL_DEPTH_TEST);
@@ -86,6 +100,7 @@ public final class ForgeOptionalEffectPipeline implements OptionalEffectPipeline
         try {
             if (mainBuffer != null) mainBuffer.bindFramebuffer(true);
         } catch (Throwable ignored) {
+            // The outer renderer still restores its GL attribute stack.
         } finally {
             mainBuffer = null;
         }

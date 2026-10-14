@@ -37,9 +37,9 @@ public class ArgentumRenderer {
         try {
             optionalHooks.onBeforeTerrainRender();
 
-            // Capture the decision once. A failed begin() can disable the pipeline,
-            // so rechecking isSupported() here would skip end() and leave its
-            // framebuffer bound during the remainder of the frame.
+            // Evaluate support before beginning the effect. Do not recheck support
+            // during cleanup: a failure may disable the pipeline, but cleanup
+            // must still be attempted in case framebuffer state needs restoration.
             if (effectPipeline.isSupported()) {
                 effectPipeline.begin();
                 effectStarted = true;
@@ -50,17 +50,22 @@ public class ArgentumRenderer {
             GL11.glEnable(GL11.GL_BLEND);
             GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
             GL11.glDisable(GL11.GL_CULL_FACE);
-            GL11.glTranslated(-view.posX, -view.posY, -view.posZ);
+
+            double px = view.posX;
+            double py = view.posY;
+            double pz = view.posZ;
+            GL11.glTranslated(-px, -py, -pz);
 
             if (meshManager != null) {
                 meshManager.render();
             }
         } finally {
+            // Restore the main framebuffer before restoring the outer GL state.
             if (effectStarted) {
                 try {
                     effectPipeline.end();
                 } catch (Throwable ignored) {
-                    // Optional effects must never prevent vanilla cleanup.
+                    // Optional effects must never prevent vanilla rendering or cleanup.
                 }
             }
             try {
