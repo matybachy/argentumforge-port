@@ -16,10 +16,11 @@ public final class ForgeOptionalEffectPipeline implements OptionalEffectPipeline
 
     @Override
     public boolean isSupported() {
-        return RenderOptimizationMath.shouldActivateOptionalEffects(
+        return RenderOptimizationMath.shouldRunOptionalEffects(
                 ArgentumConfig.enableOptionalEffects,
                 OpenGlHelper.isFramebufferEnabled(),
-                disabledByFailure
+                disabledByFailure,
+                isOnClientThread()
         );
     }
 
@@ -29,14 +30,24 @@ public final class ForgeOptionalEffectPipeline implements OptionalEffectPipeline
         Minecraft mc = Minecraft.getMinecraft();
         if (mc == null) return;
         if (!ensureBuffer(mc)) return;
-        effectBuffer.bindFramebuffer(true);
-        effectBuffer.framebufferClear();
-        active = true;
+        try {
+            effectBuffer.bindFramebuffer(true);
+            effectBuffer.framebufferClear();
+            active = true;
+        } catch (Throwable ignored) {
+            active = false;
+            disableDueToFailure();
+        }
     }
 
     @Override
     public void end() {
         if (!active) return;
+        if (!isOnClientThread()) {
+            active = false;
+            disabledByFailure = true;
+            return;
+        }
         Minecraft mc = Minecraft.getMinecraft();
         active = false;
         if (mc == null || effectBuffer == null) return;
@@ -102,5 +113,16 @@ public final class ForgeOptionalEffectPipeline implements OptionalEffectPipeline
         }
         bufferWidth = -1;
         bufferHeight = -1;
+    }
+
+    private boolean isOnClientThread() {
+        Minecraft mc = Minecraft.getMinecraft();
+        if (mc == null) return false;
+        try {
+            Object result = mc.getClass().getMethod("isCallingFromMinecraftThread").invoke(mc);
+            return result instanceof Boolean ? ((Boolean) result).booleanValue() : true;
+        } catch (Throwable ignored) {
+            return true;
+        }
     }
 }

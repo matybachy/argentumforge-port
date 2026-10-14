@@ -121,21 +121,56 @@ public final class TerrainTextureAtlas implements TextureLookup {
         if (mc == null) return null;
         try {
             BlockRendererDispatcher dispatcher = mc.getBlockRendererDispatcher();
+            if (dispatcher == null || dispatcher.getBlockModelShapes() == null) return fallbackSprite();
+            TextureAtlasSprite missing = fallbackSprite();
+
+            TextureAtlasSprite stateTexture = dispatcher.getBlockModelShapes().getTexture(state);
+            if (isUsableSprite(stateTexture, missing)) {
+                return stateTexture;
+            }
+
             IBakedModel model = dispatcher.getModelFromBlockState(state, world, pos);
-            if (model != null) {
-                List<BakedQuad> faceQuads = model.getFaceQuads(face);
-                if (!faceQuads.isEmpty()) {
-                    return dispatcher.getBlockModelShapes().getTexture(state);
-                }
-                List<BakedQuad> generalQuads = model.getGeneralQuads();
-                if (!generalQuads.isEmpty()) {
-                    return dispatcher.getBlockModelShapes().getTexture(state);
+            TextureAtlasSprite modelSprite = resolveModelSprite(model, face, missing);
+            if (isUsableSprite(modelSprite, missing)) {
+                return modelSprite;
+            }
+
+            IBlockState defaultState = state.getBlock().getDefaultState();
+            if (defaultState != null && defaultState != state) {
+                TextureAtlasSprite defaultTexture = dispatcher.getBlockModelShapes().getTexture(defaultState);
+                if (isUsableSprite(defaultTexture, missing)) {
+                    return defaultTexture;
                 }
             }
-            return dispatcher.getBlockModelShapes().getTexture(state);
+            return missing;
         } catch (Throwable ignored) {
             return fallbackSprite();
         }
+    }
+
+    private TextureAtlasSprite resolveModelSprite(IBakedModel model, EnumFacing face, TextureAtlasSprite missing) {
+        if (model == null) return missing;
+        try {
+            List<BakedQuad> faceQuads = model.getFaceQuads(face);
+            if (faceQuads != null && !faceQuads.isEmpty()) {
+                TextureAtlasSprite particle = model.getParticleTexture();
+                if (isUsableSprite(particle, missing)) return particle;
+            }
+            List<BakedQuad> generalQuads = model.getGeneralQuads();
+            if (generalQuads != null && !generalQuads.isEmpty()) {
+                TextureAtlasSprite particle = model.getParticleTexture();
+                if (isUsableSprite(particle, missing)) return particle;
+            }
+            TextureAtlasSprite particle = model.getParticleTexture();
+            if (isUsableSprite(particle, missing)) return particle;
+        } catch (Throwable ignored) {
+            return missing;
+        }
+        return missing;
+    }
+
+    private boolean isUsableSprite(TextureAtlasSprite sprite, TextureAtlasSprite missing) {
+        return sprite != null && sprite != missing;
     }
 
     private TextureAtlasSprite fallbackSprite() {

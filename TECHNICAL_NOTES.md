@@ -27,16 +27,16 @@ This repository currently includes:
 - Java 8-compatible Gradle build setup
 - client hook via RenderWorldLastEvent
 - a VBO-based chunk renderer with solid/cutout/translucent passes
-- texture-atlas binding (`TextureMap.locationBlocksTexture`) and baked-model sprite UV lookup with missing-sprite fallback
-- baked-model quad decoding for block geometry, with conservative fallback geometry if model access/decoding fails
+- texture-atlas binding (`TextureMap.locationBlocksTexture`) and baked-model/state/default-state sprite lookup before missing-sprite fallback
+- baked-model quad decoding for block geometry, with state-aware bounds/collision-shape fallback and conservative geometry if model access/decoding fails
 - world-light + lightweight AO sampling for per-vertex brightness approximation (including emissive full-bright fallback and corner-neighbor AO smoothing)
 - conservative model fallback geometry (block bounds, crossed quads for plant-like blocks, fluid corner heights + side/bottom faces)
 - prioritized, bounded chunk rebuild scheduling with world/chunk/block invalidation hooks (including MultiPlace updates and edge-neighbor dirtying)
 - conservative chunk visibility culling with radius checks plus directional backface rejection for distant chunks
 - reusable chunk VBO allocation strategy that updates in-place when capacity permits
 - optional living-entity distance culling and particle throttling hooks (both opt-in and disabled by default)
-- optional conservative cloud layer rendering (opt-in; active only when vanilla clouds are disabled to avoid double rendering)
-- optional capability-gated framebuffer composite effect pipeline with configurable tint/alpha and failure self-disable fallback
+- optional conservative cloud layer rendering (opt-in; active only when vanilla clouds are disabled and no custom sky renderer is present)
+- optional capability-gated framebuffer composite effect pipeline with configurable tint/alpha, failure self-disable fallback, and client-thread gating (no worker-thread GL calls)
 - optional conservative weather-render replacement path with distance/frustum filtering and automatic fallback to vanilla/custom weather renderers
 - compatibility interfaces for texture lookup, lighting, GPU buffers, and optional effects
 
@@ -71,7 +71,7 @@ Runtime validation should be performed in a real 1.8.9 client session:
 ## Current truth-in-advertising status
 - Implemented: baked-model quad meshing path with safe fallback for unsupported/missing model data.
 - Partially implemented: fluid shape/UV parity and smooth-light/AO parity (current implementation is conservative and stable, not 1:1 vanilla; same-material liquid internals are now suppressed, emissive blocks remain full-bright, and AO uses local corner-neighbor sampling).
-- Partially implemented: optional performance hooks (living-entity distance culling + particle throttle + conservative cloud layer + filtered weather renderer + framebuffer composite/tint post pass).
+- Partially implemented: optional performance hooks (living-entity distance culling + particle throttle + conservative cloud layer + filtered weather renderer + framebuffer composite/tint post pass), with compatibility gates for named/leashed entities, custom sky renderers, and client-thread-only post effects.
 - Fallback-only in this pass: item rendering optimization and block-entity optimization to preserve vanilla/custom renderer compatibility on Forge 1.8.9.
 - Unverified in this execution environment: real in-game visual parity/performance due unavailable runtime client validation here.
 - Platform-blocked: direct parity with upstream Argentum/Celeritas renderer abstractions beyond what Forge 1.8.9 exposes.

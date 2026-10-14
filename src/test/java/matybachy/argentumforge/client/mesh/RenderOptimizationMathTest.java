@@ -23,11 +23,25 @@ public class RenderOptimizationMathTest {
     }
 
     @Test
-    public void optionalEffectsActivationRequiresConfigCapabilityAndHealthyRuntime() {
-        Assert.assertTrue(RenderOptimizationMath.shouldActivateOptionalEffects(true, true, false));
-        Assert.assertFalse(RenderOptimizationMath.shouldActivateOptionalEffects(false, true, false));
-        Assert.assertFalse(RenderOptimizationMath.shouldActivateOptionalEffects(true, false, false));
-        Assert.assertFalse(RenderOptimizationMath.shouldActivateOptionalEffects(true, true, true));
+    public void cloudFallbackRequiresVanillaCloudsDisabledAndNoCustomSky() {
+        Assert.assertTrue(RenderOptimizationMath.shouldRunCloudFallback(0, true, true, false));
+        Assert.assertFalse(RenderOptimizationMath.shouldRunCloudFallback(2, true, true, false));
+        Assert.assertFalse(RenderOptimizationMath.shouldRunCloudFallback(0, true, true, true));
+    }
+
+    @Test
+    public void entityDistanceCullingSkipsNamedOrLeashedEntities() {
+        Assert.assertTrue(RenderOptimizationMath.shouldUseEntityDistanceCulling(true, true, true, false, false));
+        Assert.assertFalse(RenderOptimizationMath.shouldUseEntityDistanceCulling(true, true, true, true, false));
+        Assert.assertFalse(RenderOptimizationMath.shouldUseEntityDistanceCulling(true, true, true, false, true));
+    }
+
+    @Test
+    public void optionalEffectsRequireCapabilitiesAndMainThread() {
+        Assert.assertTrue(RenderOptimizationMath.shouldRunOptionalEffects(true, true, false, true));
+        Assert.assertFalse(RenderOptimizationMath.shouldRunOptionalEffects(true, true, false, false));
+        Assert.assertFalse(RenderOptimizationMath.shouldRunOptionalEffects(true, false, false, true));
+        Assert.assertFalse(RenderOptimizationMath.shouldRunOptionalEffects(true, true, true, true));
     }
 
     @Test

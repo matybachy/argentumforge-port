@@ -19,8 +19,17 @@ public final class RenderOptimizationMath {
         return Math.max(clampedCurrent, clampedMinimum);
     }
 
-    public static boolean shouldActivateOptionalEffects(boolean enabledInConfig, boolean framebufferEnabled, boolean disabledByFailure) {
-        return enabledInConfig && framebufferEnabled && !disabledByFailure;
+    public static boolean shouldRunCloudFallback(int cloudsSetting, boolean cloudHooksEnabled, boolean cloudRendererEnabled, boolean hasCustomSkyRenderer) {
+        return cloudHooksEnabled && cloudRendererEnabled && cloudsSetting == 0 && !hasCustomSkyRenderer;
+    }
+
+    public static boolean shouldUseEntityDistanceCulling(boolean rendererEnabled, boolean entityHooksEnabled,
+                                                         boolean distanceCullingEnabled, boolean hasCustomName, boolean isLeashed) {
+        return rendererEnabled && entityHooksEnabled && distanceCullingEnabled && !hasCustomName && !isLeashed;
+    }
+
+    public static boolean shouldRunOptionalEffects(boolean configEnabled, boolean framebufferEnabled, boolean disabledByFailure, boolean onClientThread) {
+        return configEnabled && framebufferEnabled && !disabledByFailure && onClientThread;
     }
 
     public static int clampedPercent(int value) {

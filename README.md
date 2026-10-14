@@ -7,14 +7,14 @@ Current scope
 - Independent mod ID: `argentumforge`
 - Client render hook active: `RenderWorldLastEvent`
 - Chunk renderer prototype with solid/cutout/translucent passes and chunk lifecycle hooks
-- Terrain atlas binding via `TextureMap.locationBlocksTexture` with baked-model sprite lookup and missing-sprite fallback
+- Terrain atlas binding via `TextureMap.locationBlocksTexture` with state/model/default-state lookup before missing-sprite fallback
 - World-light sampling + lightweight AO approximation for face/vertex shading (including emissive full-bright fallback and corner-neighbor AO smoothing)
-- Baked-model quad meshing for vanilla block models (including slabs/stairs/fences/panes/doors/trapdoors/rails/etc.) with conservative block-bounds/crossed fallback
+- Baked-model quad meshing for vanilla block models (including slabs/stairs/fences/panes/doors/trapdoors/rails/etc.) with state-aware bounds/collision-shape fallback and conservative cross/box geometry fallback
 - Conservative fluid top/side/bottom geometry with averaged corner heights, same-material internal-face suppression, and translucent layering
 - Conservative chunk visibility culling (radius + directional backface rejection) and chunk VBO buffer reuse
 - Optional living-entity distance culling and particle throttling (opt-in, conservative, vanilla-compatible defaults)
-- Optional conservative cloud layer renderer (opt-in, only active when vanilla clouds are disabled)
-- Optional capability-gated framebuffer post-processing composite with configurable tint/alpha and self-disable fallback
+- Optional conservative cloud layer renderer (opt-in, only active when vanilla clouds are disabled and no custom sky renderer is present)
+- Optional capability-gated framebuffer post-processing composite with configurable tint/alpha and thread/runtime self-disable fallback
 - Optional conservative weather renderer replacement with distance/frustum filtering and automatic vanilla/custom-renderer fallback
 - Vanilla fallback preserved; experimental renderer is disabled by default and config-driven
 
@@ -43,7 +43,7 @@ Known limits
 - Model path still uses conservative per-face light/AO approximation and does not fully reproduce vanilla block-model AO weighting.
 - Item and block-entity optimization hooks remain fallback-only compatibility switches in this pass to avoid unsafe or incompatible render interception on Forge 1.8.9.
 - Weather optimization is partial: an opt-in replacement weather renderer applies conservative distance/frustum filtering, but remains a compatibility-first approximation of vanilla visuals.
-- Optional cloud rendering intentionally uses a conservative flat cloud layer and only activates when vanilla cloud rendering is disabled in game settings to avoid double-rendering.
+- Optional cloud rendering intentionally uses a conservative flat cloud layer and only activates when vanilla clouds are disabled and no custom sky renderer is present to avoid double-rendering/conflicts.
 - Optional post-processing uses a capability-gated framebuffer composite pass with configurable tint multipliers and disables itself automatically on allocation/composite failures.
 - Build/runtime verification in this execution environment may be blocked when ForgeGradle cannot resolve `files.minecraftforge.net`.
 - Fluids and translucent ordering are chunk-level approximations and require runtime visual verification.

@@ -4,6 +4,7 @@ import matybachy.argentumforge.ArgentumConfig;
 import matybachy.argentumforge.ArgentumForge;
 import net.minecraft.client.Minecraft;
 import net.minecraft.entity.Entity;
+import net.minecraft.entity.EntityLiving;
 import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.util.MathHelper;
 import net.minecraftforge.client.event.RenderLivingEvent;
@@ -19,7 +20,7 @@ public final class OptionalRenderHooks {
     }
 
     public void onAfterTerrainRender() {
-        if (useCloudHooks() && ArgentumConfig.enableCloudRenderer) renderCloudLayer();
+        if (canUseCloudFallbackRenderer()) renderCloudLayer();
     }
 
     public void onClientTick() {
@@ -48,14 +49,23 @@ public final class OptionalRenderHooks {
 
     @SubscribeEvent
     public void onRenderLivingPre(RenderLivingEvent.Pre event) {
-        if (!ArgentumForge.ENABLE_EXPERIMENTAL_CHUNK_RENDERER) return;
-        if (!ArgentumConfig.enableEntityHooks || !ArgentumConfig.enableEntityDistanceCulling) return;
-        if (event == null || event.entity == null) return;
+        if (event == null || event.entity == null || event.renderer == null) return;
 
         Entity view = mc != null ? mc.getRenderViewEntity() : null;
         if (!(event.entity instanceof EntityLivingBase) || view == null) return;
         if (event.entity == view) return;
         if (event.entity.ticksExisted < 1) return;
+        if (event.entity.ridingEntity != null || event.entity.riddenByEntity != null) return;
+
+        boolean hasCustomName = event.entity.hasCustomName();
+        boolean isLeashed = event.entity instanceof EntityLiving && ((EntityLiving) event.entity).getLeashed();
+        if (!RenderOptimizationMath.shouldUseEntityDistanceCulling(
+                ArgentumForge.ENABLE_EXPERIMENTAL_CHUNK_RENDERER,
+                ArgentumConfig.enableEntityHooks,
+                ArgentumConfig.enableEntityDistanceCulling,
+                hasCustomName,
+                isLeashed
+        )) return;
 
         if (RenderOptimizationMath.shouldCullByDistance(
                 view.getDistanceSqToEntity(event.entity),
@@ -96,26 +106,46 @@ public final class OptionalRenderHooks {
     }
 
     public boolean useEntityHooks() {
-        return ArgentumConfig.enableEntityHooks;
+        return ArgentumForge.ENABLE_EXPERIMENTAL_CHUNK_RENDERER && ArgentumConfig.enableEntityHooks;
     }
 
     public boolean useWeatherHooks() {
-        return ArgentumConfig.enableWeatherHooks;
+        return false;
     }
 
     public boolean useCloudHooks() {
-        return ArgentumConfig.enableCloudHooks;
+        return canUseCloudFallbackRenderer();
     }
 
     public boolean useItemHooks() {
-        return ArgentumConfig.enableItemHooks;
+        return false;
     }
 
     public boolean useParticleHooks() {
-        return ArgentumConfig.enableParticleHooks;
+        return ArgentumForge.ENABLE_EXPERIMENTAL_CHUNK_RENDERER && ArgentumConfig.enableParticleHooks;
     }
 
     public boolean useBlockEntityHooks() {
-        return ArgentumConfig.enableBlockEntityHooks;
+        return false;
+    }
+
+    private boolean canUseCloudFallbackRenderer() {
+        if (mc == null || mc.theWorld == null || mc.gameSettings == null) return false;
+        return RenderOptimizationMath.shouldRunCloudFallback(
+                mc.gameSettings.clouds,
+                ArgentumConfig.enableCloudHooks,
+                ArgentumConfig.enableCloudRenderer,
+                hasCustomSkyRenderer()
+        );
+    }
+
+    private boolean hasCustomSkyRenderer() {
+        if (mc == null || mc.theWorld == null || mc.theWorld.provider == null) return false;
+        try {
+            Object skyRenderer = mc.theWorld.provider.getClass().getMethod("getSkyRenderer").invoke(mc.theWorld.provider);
+            return skyRenderer != null;
+        } catch (Throwable ignored) {
+            return false;
+        }
     }
 }
