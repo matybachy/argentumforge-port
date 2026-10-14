@@ -12,6 +12,9 @@ Current scope
 - Baked-model quad meshing for vanilla block models (including slabs/stairs/fences/panes/doors/trapdoors/rails/etc.) with conservative block-bounds/crossed fallback
 - Conservative fluid top/side/bottom geometry with averaged corner heights, same-material internal-face suppression, and translucent layering
 - Conservative chunk visibility culling (radius + directional backface rejection) and chunk VBO buffer reuse
+- Optional living-entity distance culling and particle throttling (opt-in, conservative, vanilla-compatible defaults)
+- Optional conservative cloud layer renderer (opt-in, only active when vanilla clouds are disabled)
+- Optional capability-gated framebuffer composite pass for LWJGL2-compatible post-processing fallback
 - Vanilla fallback preserved; experimental renderer is disabled by default and config-driven
 
 Repository status
@@ -31,13 +34,15 @@ Configuration
   - `renderChunkRadius`
   - `rebuildBudgetPerTick`
   - `enableLightingAo`, `enableTransparency`, `enableModelFallback`
-  - optional guarded hooks: `enableOptionalEffects`, `enableEntityHooks`, `enableWeatherHooks`, `enableCloudHooks`
+  - optional guarded hooks: `enableOptionalEffects`, `optionalEffectsCompositeAlpha`, `enableEntityHooks`, `enableEntityDistanceCulling`, `entityCullingDistance`, `enableParticleHooks`, `particleThrottleSetting`, `enableItemHooks`, `enableBlockEntityHooks`, `enableWeatherHooks`, `enableCloudHooks`, `enableCloudRenderer`, `cloudRenderRadiusBlocks`
 
 Known limits
 - This is not full upstream Argentum parity.
 - Lighting/AO and model support are conservative Forge 1.8.9 approximations.
 - Model path still uses conservative per-face light/AO approximation and does not fully reproduce vanilla block-model AO weighting.
-- Optional effects/entity/weather/cloud hooks keep vanilla rendering as the compatibility path when optimization hooks are disabled or unsupported.
+- Item, block-entity, and weather optimization hooks remain fallback-only compatibility switches in this pass to avoid unsafe or incompatible render interception on Forge 1.8.9.
+- Optional cloud rendering intentionally uses a conservative flat cloud layer and only activates when vanilla cloud rendering is disabled in game settings to avoid double-rendering.
+- Optional post-processing uses a capability-gated framebuffer composite pass and disables itself automatically on allocation/composite failures.
 - Build/runtime verification in this execution environment may be blocked when ForgeGradle cannot resolve `files.minecraftforge.net`.
 - Fluids and translucent ordering are chunk-level approximations and require runtime visual verification.
 - The experimental renderer is disabled by default unless explicitly enabled for runtime validation.

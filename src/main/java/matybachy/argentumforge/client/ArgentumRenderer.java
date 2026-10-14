@@ -21,6 +21,7 @@ public class ArgentumRenderer {
 
     public ArgentumRenderer() {
         MinecraftForge.EVENT_BUS.register(this);
+        MinecraftForge.EVENT_BUS.register(optionalHooks);
     }
 
     @SubscribeEvent
@@ -54,5 +55,9 @@ public class ArgentumRenderer {
         optionalHooks.onAfterTerrainRender();
         GL11.glPopMatrix();
         GL11.glPopAttrib();
+    }
+
+    public void onClientTick() {
+        optionalHooks.onClientTick();
     }
 }
