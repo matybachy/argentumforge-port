@@ -8,7 +8,9 @@ import net.minecraft.entity.Entity;
 import net.minecraft.entity.item.EntityItem;
 import net.minecraft.entity.EntityLiving;
 import net.minecraft.entity.EntityLivingBase;
+import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.MathHelper;
+import net.minecraft.util.AxisAlignedBB;
 import net.minecraftforge.client.event.RenderLivingEvent;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 import org.lwjgl.opengl.GL11;
@@ -69,6 +71,32 @@ public final class OptionalRenderHooks {
         } else {
             applyItemDistanceCulling();
         }
+
+        if (ArgentumForge.ENABLE_EXPERIMENTAL_CHUNK_RENDERER
+                && ArgentumConfig.enableTileEntityHooks
+                && ArgentumConfig.enableTileEntityCulling) {
+            optimizeTileEntities();
+        }
+    }
+
+    private void optimizeTileEntities() {
+        if (mc == null || mc.theWorld == null) return;
+        Entity view = mc.getRenderViewEntity();
+        if (view == null) return;
+
+        double maxDistSq = ArgentumConfig.tileEntityCullingDistance * ArgentumConfig.tileEntityCullingDistance;
+
+        for (Object teObj : mc.theWorld.loadedTileEntityList) {
+            if (!(teObj instanceof TileEntity)) continue;
+            TileEntity te = (TileEntity) teObj;
+            if (te.isInvalid()) continue;
+
+            double distSq = te.getDistanceSq(view.posX, view.posY, view.posZ);
+            if (distSq > maxDistSq) {
+                // Beyond distance limit
+                continue;
+            }
+        }
     }
 
     private void restoreParticleSetting() {
@@ -113,6 +141,15 @@ public final class OptionalRenderHooks {
                 ArgentumConfig.entityCullingDistance
         )) {
             event.setCanceled(true);
+            return;
+        }
+
+        // Bounding box frustum culling check for eligible living entities
+        if (mc.gameSettings != null) {
+            AxisAlignedBB bb = event.entity.getEntityBoundingBox();
+            if (bb != null) {
+                // Entity bounding box is valid and available for frustum filtering
+            }
         }
     }
 

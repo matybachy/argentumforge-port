@@ -29,9 +29,9 @@ public final class BlockFaceMesher {
     private final TerrainLighting lightingLookup = TerrainLighting.getInstance();
 
     public MeshData buildChunkMesh(World world, int chunkX, int chunkZ) {
-        List<Float> solid = new ArrayList<Float>();
-        List<Float> cutout = new ArrayList<Float>();
-        List<Float> translucent = new ArrayList<Float>();
+        FloatArrayList solid = new FloatArrayList(4096);
+        FloatArrayList cutout = new FloatArrayList(2048);
+        FloatArrayList translucent = new FloatArrayList(2048);
 
         int baseX = chunkX << 4;
         int baseZ = chunkZ << 4;
@@ -49,7 +49,7 @@ public final class BlockFaceMesher {
                         pass = TextureLookup.Pass.SOLID;
                     }
 
-                    List<Float> target = pass == TextureLookup.Pass.TRANSLUCENT
+                    FloatArrayList target = pass == TextureLookup.Pass.TRANSLUCENT
                             ? translucent
                             : (pass == TextureLookup.Pass.CUTOUT ? cutout : solid);
 
@@ -66,7 +66,7 @@ public final class BlockFaceMesher {
             }
         }
 
-        return new MeshData(toFloatArray(solid), toFloatArray(cutout), toFloatArray(translucent));
+        return new MeshData(solid.toArray(), cutout.toArray(), translucent.toArray());
     }
 
     private boolean isCrossModel(Block block) {
@@ -83,7 +83,7 @@ public final class BlockFaceMesher {
                 || block instanceof BlockTorch;
     }
 
-    private boolean emitModelQuads(World world, List<Float> vertices, BlockPos pos, IBlockState state, Block block, TextureLookup.Pass pass) {
+    private boolean emitModelQuads(World world, FloatArrayList vertices, BlockPos pos, IBlockState state, Block block, TextureLookup.Pass pass) {
         Minecraft mc = Minecraft.getMinecraft();
         if (mc == null) return false;
         try {
@@ -115,7 +115,7 @@ public final class BlockFaceMesher {
         }
     }
 
-    private boolean emitBakedQuad(World world, List<Float> vertices, BlockPos pos, IBlockState state, Block block,
+    private boolean emitBakedQuad(World world, FloatArrayList vertices, BlockPos pos, IBlockState state, Block block,
                                   TextureLookup.Pass pass, EnumFacing face, BakedQuad quad) {
         if (quad == null) return false;
         int[] data = quad.getVertexData();
@@ -126,6 +126,7 @@ public final class BlockFaceMesher {
         float[] light = lightingLookup.sampleVertexLight(world, pos, face, block, textureLookup.isEmissive(block));
         float alpha = textureLookup.getAlpha(block, pass);
         float[] tint = resolveTint(world, pos, state, quad);
+        float[] lightmap = lightingLookup.sampleLightmapUV(world, pos);
 
         int[] order = new int[]{0, 1, 2, 0, 2, 3};
         for (int i = 0; i < order.length; i++) {
@@ -136,7 +137,7 @@ public final class BlockFaceMesher {
             float z = pos.getZ() + Float.intBitsToFloat(data[offset + 2]);
             float u = Float.intBitsToFloat(data[offset + 4]);
             float v = Float.intBitsToFloat(data[offset + 5]);
-            pushRaw(vertices, x, y, z, u, v, tint[0] * light[vertexIndex], tint[1] * light[vertexIndex], tint[2] * light[vertexIndex], alpha);
+            pushRaw(vertices, x, y, z, u, v, lightmap[0], lightmap[1], tint[0] * light[vertexIndex], tint[1] * light[vertexIndex], tint[2] * light[vertexIndex], alpha);
         }
         return true;
     }
@@ -157,7 +158,7 @@ public final class BlockFaceMesher {
         };
     }
 
-    private void emitBox(World world, List<Float> vertices, BlockPos pos, IBlockState state, Block block, TextureLookup.Pass pass) {
+    private void emitBox(World world, FloatArrayList vertices, BlockPos pos, IBlockState state, Block block, TextureLookup.Pass pass) {
         Bounds bounds = resolveFallbackBounds(world, pos, state, block);
         float minX = bounds.minX;
         float minY = bounds.minY;
@@ -202,10 +203,11 @@ public final class BlockFaceMesher {
         return bounds != null ? bounds : Bounds.full();
     }
 
-    private void emitCross(World world, List<Float> vertices, BlockPos pos, IBlockState state, Block block, TextureLookup.Pass pass) {
+    private void emitCross(World world, FloatArrayList vertices, BlockPos pos, IBlockState state, Block block, TextureLookup.Pass pass) {
         TextureLookup.TerrainFaceData faceData = textureLookup.resolveFace(world, pos, state, EnumFacing.UP);
         float[] lightA = lightingLookup.sampleVertexLight(world, pos, EnumFacing.UP, block, textureLookup.isEmissive(block));
         float alpha = textureLookup.getAlpha(block, pass);
+        float[] lightmap = lightingLookup.sampleLightmapUV(world, pos);
         float x0 = pos.getX() + 0.15f;
         float x1 = pos.getX() + 0.85f;
         float z0 = pos.getZ() + 0.15f;
@@ -213,11 +215,11 @@ public final class BlockFaceMesher {
         float y0 = pos.getY();
         float y1 = pos.getY() + 1.0f;
 
-        quad(vertices, x0, y0, z0, x1, y0, z1, x1, y1, z1, x0, y1, z0, faceData, lightA, alpha);
-        quad(vertices, x1, y0, z0, x0, y0, z1, x0, y1, z1, x1, y1, z0, faceData, lightA, alpha);
+        quad(vertices, x0, y0, z0, x1, y0, z1, x1, y1, z1, x0, y1, z0, faceData, lightA, alpha, lightmap);
+        quad(vertices, x1, y0, z0, x0, y0, z1, x0, y1, z1, x1, y1, z0, faceData, lightA, alpha, lightmap);
     }
 
-    private void emitFluid(World world, List<Float> vertices, BlockPos pos, IBlockState state, Block block, TextureLookup.Pass pass) {
+    private void emitFluid(World world, FloatArrayList vertices, BlockPos pos, IBlockState state, Block block, TextureLookup.Pass pass) {
         Material fluidMaterial = block.getMaterial();
         float hNW = fluidCornerHeight(world, pos, -1, -1, fluidMaterial);
         float hNE = fluidCornerHeight(world, pos, 1, -1, fluidMaterial);
@@ -250,7 +252,7 @@ public final class BlockFaceMesher {
         }
     }
 
-    private void emitFluidSide(World world, List<Float> vertices, BlockPos pos, IBlockState state, Block block, EnumFacing side,
+    private void emitFluidSide(World world, FloatArrayList vertices, BlockPos pos, IBlockState state, Block block, EnumFacing side,
                                TextureLookup.Pass pass,
                                float hNW, float hNE, float hSE, float hSW) {
         TextureLookup.TerrainFaceData uv = textureLookup.resolveFace(world, pos, state, side);
@@ -345,11 +347,12 @@ public final class BlockFaceMesher {
         return block != null && block.getMaterial().isLiquid() && block.getMaterial() == material;
     }
 
-    private void emitFace(World world, List<Float> vertices, BlockPos pos, IBlockState state, Block block, EnumFacing face,
+    private void emitFace(World world, FloatArrayList vertices, BlockPos pos, IBlockState state, Block block, EnumFacing face,
                           TextureLookup.Pass pass, float minX, float minY, float minZ, float maxX, float maxY, float maxZ) {
         TextureLookup.TerrainFaceData faceData = textureLookup.resolveFace(world, pos, state, face);
         float[] light = lightingLookup.sampleVertexLight(world, pos, face, block, textureLookup.isEmissive(block));
         float alpha = textureLookup.getAlpha(block, pass);
+        float[] lightmap = lightingLookup.sampleLightmapUV(world, pos);
 
         float x0 = pos.getX() + minX;
         float x1 = pos.getX() + maxX;
@@ -360,54 +363,59 @@ public final class BlockFaceMesher {
 
         switch (face) {
             case EAST:
-                quad(vertices, x1, y0, z1, x1, y0, z0, x1, y1, z0, x1, y1, z1, faceData, light, alpha);
+                quad(vertices, x1, y0, z1, x1, y0, z0, x1, y1, z0, x1, y1, z1, faceData, light, alpha, lightmap);
                 return;
             case WEST:
-                quad(vertices, x0, y0, z0, x0, y0, z1, x0, y1, z1, x0, y1, z0, faceData, light, alpha);
+                quad(vertices, x0, y0, z0, x0, y0, z1, x0, y1, z1, x0, y1, z0, faceData, light, alpha, lightmap);
                 return;
             case UP:
-                quad(vertices, x0, y1, z1, x1, y1, z1, x1, y1, z0, x0, y1, z0, faceData, light, alpha);
+                quad(vertices, x0, y1, z1, x1, y1, z1, x1, y1, z0, x0, y1, z0, faceData, light, alpha, lightmap);
                 return;
             case DOWN:
-                quad(vertices, x0, y0, z0, x1, y0, z0, x1, y0, z1, x0, y0, z1, faceData, light, alpha);
+                quad(vertices, x0, y0, z0, x1, y0, z0, x1, y0, z1, x0, y0, z1, faceData, light, alpha, lightmap);
                 return;
             case SOUTH:
-                quad(vertices, x0, y0, z1, x1, y0, z1, x1, y1, z1, x0, y1, z1, faceData, light, alpha);
+                quad(vertices, x0, y0, z1, x1, y0, z1, x1, y1, z1, x0, y1, z1, faceData, light, alpha, lightmap);
                 return;
             case NORTH:
             default:
-                quad(vertices, x1, y0, z0, x0, y0, z0, x0, y1, z0, x1, y1, z0, faceData, light, alpha);
+                quad(vertices, x1, y0, z0, x0, y0, z0, x0, y1, z0, x1, y1, z0, faceData, light, alpha, lightmap);
         }
     }
 
-    private void quad(List<Float> vertices,
+    private void quad(FloatArrayList vertices,
                       float ax, float ay, float az,
                       float bx, float by, float bz,
                       float cx, float cy, float cz,
                       float dx, float dy, float dz,
                       TextureLookup.TerrainFaceData uv,
                       float[] light,
-                      float alpha) {
-        push(vertices, ax, ay, az, uv.u0, uv.v1, uv, light[0], alpha);
-        push(vertices, bx, by, bz, uv.u1, uv.v1, uv, light[1], alpha);
-        push(vertices, cx, cy, cz, uv.u1, uv.v0, uv, light[2], alpha);
-        push(vertices, ax, ay, az, uv.u0, uv.v1, uv, light[0], alpha);
-        push(vertices, cx, cy, cz, uv.u1, uv.v0, uv, light[2], alpha);
-        push(vertices, dx, dy, dz, uv.u0, uv.v0, uv, light[3], alpha);
+                      float alpha,
+                      float[] lightmap) {
+        float uL = lightmap != null ? lightmap[0] : 0.0f;
+        float vL = lightmap != null ? lightmap[1] : 0.0f;
+        push(vertices, ax, ay, az, uv.u0, uv.v1, uL, vL, uv, light[0], alpha);
+        push(vertices, bx, by, bz, uv.u1, uv.v1, uL, vL, uv, light[1], alpha);
+        push(vertices, cx, cy, cz, uv.u1, uv.v0, uL, vL, uv, light[2], alpha);
+        push(vertices, ax, ay, az, uv.u0, uv.v1, uL, vL, uv, light[0], alpha);
+        push(vertices, cx, cy, cz, uv.u1, uv.v0, uL, vL, uv, light[2], alpha);
+        push(vertices, dx, dy, dz, uv.u0, uv.v0, uL, vL, uv, light[3], alpha);
     }
 
-    private void push(List<Float> values, float x, float y, float z, float u, float v,
+    private void push(FloatArrayList values, float x, float y, float z, float u, float v, float uLight, float vLight,
                       TextureLookup.TerrainFaceData uv, float light, float alpha) {
-        pushRaw(values, x, y, z, u, v, uv.r * light, uv.g * light, uv.b * light, alpha);
+        pushRaw(values, x, y, z, u, v, uLight, vLight, uv.r * light, uv.g * light, uv.b * light, alpha);
     }
 
-    private void pushRaw(List<Float> values, float x, float y, float z, float u, float v,
+    private void pushRaw(FloatArrayList values, float x, float y, float z, float u, float v, float uLight, float vLight,
                          float r, float g, float b, float alpha) {
         values.add(x);
         values.add(y);
         values.add(z);
         values.add(u);
         values.add(v);
+        values.add(uLight);
+        values.add(vLight);
         values.add(clamp(r));
         values.add(clamp(g));
         values.add(clamp(b));
@@ -416,12 +424,6 @@ public final class BlockFaceMesher {
 
     private float clamp(float value) {
         return MeshMath.clamp01(value);
-    }
-
-    private float[] toFloatArray(List<Float> values) {
-        float[] result = new float[values.size()];
-        for (int i = 0; i < values.size(); i++) result[i] = values.get(i);
-        return result;
     }
 
     public static final class MeshData {

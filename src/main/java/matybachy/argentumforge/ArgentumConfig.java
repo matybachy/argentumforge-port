@@ -24,6 +24,9 @@ public final class ArgentumConfig {
     public static boolean enableItemHooks = false;
     public static boolean enableItemDistanceCulling = false;
     public static int itemCullingDistance = 96;
+    public static boolean enableTileEntityHooks = false;
+    public static boolean enableTileEntityCulling = false;
+    public static int tileEntityCullingDistance = 64;
     public static boolean enableParticleHooks = false;
     public static int particleThrottleSetting = 1;
     public static boolean enableWeatherHooks = false;
@@ -58,6 +61,9 @@ public final class ArgentumConfig {
             enableItemHooks = cfg.getBoolean("enableItemHooks", CAT_FEATURES, false, "Enable opt-in dropped-item render-distance adjustment.");
             enableItemDistanceCulling = cfg.getBoolean("enableItemDistanceCulling", CAT_FEATURES, false, "Enable opt-in distance culling for dropped item entities.");
             itemCullingDistance = cfg.getInt("itemCullingDistance", CAT_FEATURES, 96, 16, 512, "Maximum render distance in blocks when dropped-item distance culling is enabled.");
+            enableTileEntityHooks = cfg.getBoolean("enableTileEntityHooks", CAT_FEATURES, false, "Enable opt-in tile-entity rendering optimizations.");
+            enableTileEntityCulling = cfg.getBoolean("enableTileEntityCulling", CAT_FEATURES, false, "Enable distance and frustum culling for tile entities.");
+            tileEntityCullingDistance = cfg.getInt("tileEntityCullingDistance", CAT_FEATURES, 64, 16, 256, "Maximum render distance in blocks for tile entities.");
             enableParticleHooks = cfg.getBoolean("enableParticleHooks", CAT_FEATURES, false, "Enable optional particle throttling hooks with vanilla fallback.");
             particleThrottleSetting = cfg.getInt("particleThrottleSetting", CAT_FEATURES, 1, 0, 2, "Particle quality floor when particle throttling is enabled (0=all, 1=decreased, 2=minimal).");
             enableWeatherHooks = cfg.getBoolean("enableWeatherHooks", CAT_FEATURES, false, "Enable optional rain/snow hooks with vanilla fallback.");

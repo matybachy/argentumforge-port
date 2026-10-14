@@ -40,6 +40,17 @@ public final class TerrainLighting implements LightingLookup {
         return INSTANCE.sampleVertexLight(world, pos, face, block, emissive)[0];
     }
 
+    /**
+     * Calculates lightmap UV coordinates (0..1 normalized) for block and sky light.
+     */
+    public float[] sampleLightmapUV(World world, BlockPos pos) {
+        if (world == null || pos == null) return new float[]{0.0f, 0.0f};
+        int combined = world.getCombinedLight(pos, 0);
+        int sky = (combined >> 20) & 0xF;
+        int block = (combined >> 4) & 0xF;
+        return new float[]{(block * 16 + 8) / 256.0f, (sky * 16 + 8) / 256.0f};
+    }
+
     private float sampleCombined(World world, BlockPos pos, int minBlockLight) {
         int combined = world.getCombinedLight(pos, minBlockLight);
         int sky = (combined >> 20) & 0xF;

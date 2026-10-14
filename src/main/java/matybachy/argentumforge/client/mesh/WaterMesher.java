@@ -6,15 +6,12 @@ import net.minecraft.util.BlockPos;
 import net.minecraft.util.EnumFacing;
 import net.minecraft.world.World;
 
-import java.util.ArrayList;
-import java.util.List;
-
 /**
  * Generates water-surface quads for the active chunk so liquid blocks render in a translucent pass.
  */
 public final class WaterMesher {
     public MeshData build(World world, int chunkX, int chunkZ) {
-        List<Float> vertices = new ArrayList<Float>();
+        FloatArrayList vertices = new FloatArrayList(512);
         int baseX = chunkX << 4;
         int baseZ = chunkZ << 4;
 
@@ -34,7 +31,7 @@ public final class WaterMesher {
             }
         }
 
-        return new MeshData(toFloatArray(vertices));
+        return new MeshData(vertices.toArray());
     }
 
     private boolean isWaterSurfaceVisible(World world, int x, int y, int z) {
@@ -45,31 +42,34 @@ public final class WaterMesher {
         return !above.getMaterial().isLiquid();
     }
 
-    private void emitSurface(World world, List<Float> verts, int x, int y, int z, IBlockState state, Block block) {
+    private void emitSurface(World world, FloatArrayList verts, int x, int y, int z, IBlockState state, Block block) {
         BlockPos pos = new BlockPos(x, y, z);
         TerrainTextureAtlas.FaceUV uv = TerrainTextureAtlas.getFaceUVs(world, pos, state, EnumFacing.UP);
         float[] color = TerrainTextureAtlas.getFaceColor(world, pos, state, true);
         float alpha = TerrainTextureAtlas.getAlpha(block, true);
+        float[] lightmap = TerrainLighting.getInstance().sampleLightmapUV(world, pos);
 
         float r = clamp(color[0]);
         float g = clamp(color[1]);
         float b = clamp(color[2]);
 
-        push(verts, x, y + 1, z, uv.u0, uv.v0, r, g, b, alpha);
-        push(verts, x + 1, y + 1, z, uv.u1, uv.v0, r, g, b, alpha);
-        push(verts, x + 1, y + 1, z + 1, uv.u1, uv.v1, r, g, b, alpha);
+        push(verts, x, y + 1, z, uv.u0, uv.v0, lightmap[0], lightmap[1], r, g, b, alpha);
+        push(verts, x + 1, y + 1, z, uv.u1, uv.v0, lightmap[0], lightmap[1], r, g, b, alpha);
+        push(verts, x + 1, y + 1, z + 1, uv.u1, uv.v1, lightmap[0], lightmap[1], r, g, b, alpha);
 
-        push(verts, x, y + 1, z, uv.u0, uv.v0, r, g, b, alpha);
-        push(verts, x + 1, y + 1, z + 1, uv.u1, uv.v1, r, g, b, alpha);
-        push(verts, x, y + 1, z + 1, uv.u0, uv.v1, r, g, b, alpha);
+        push(verts, x, y + 1, z, uv.u0, uv.v0, lightmap[0], lightmap[1], r, g, b, alpha);
+        push(verts, x + 1, y + 1, z + 1, uv.u1, uv.v1, lightmap[0], lightmap[1], r, g, b, alpha);
+        push(verts, x, y + 1, z + 1, uv.u0, uv.v1, lightmap[0], lightmap[1], r, g, b, alpha);
     }
 
-    private void push(List<Float> verts, float x, float y, float z, float u, float v, float r, float g, float b, float a) {
+    private void push(FloatArrayList verts, float x, float y, float z, float u, float v, float uLight, float vLight, float r, float g, float b, float a) {
         verts.add(x);
         verts.add(y);
         verts.add(z);
         verts.add(u);
         verts.add(v);
+        verts.add(uLight);
+        verts.add(vLight);
         verts.add(r);
         verts.add(g);
         verts.add(b);
@@ -80,15 +80,6 @@ public final class WaterMesher {
         if (value < 0.0f) return 0.0f;
         if (value > 1.0f) return 1.0f;
         return value;
-    }
-
-    private float[] toFloatArray(List<Float> values) {
-        if (values.isEmpty()) return new float[0];
-        float[] out = new float[values.size()];
-        for (int i = 0; i < values.size(); i++) {
-            out[i] = values.get(i);
-        }
-        return out;
     }
 
     public static final class MeshData {

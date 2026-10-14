@@ -25,6 +25,14 @@ public final class ChunkMesh {
         }
 
         BlockFaceMesher.MeshData data = mesher.buildChunkMesh(world, chunkX, chunkZ);
+        uploadData(data);
+    }
+
+    public void uploadData(BlockFaceMesher.MeshData data) {
+        if (data == null) {
+            built = false;
+            return;
+        }
         solidVbo.upload(data.getSolidVertices());
         cutoutVbo.upload(data.getCutoutVertices());
         translucentVbo.upload(data.getTranslucentVertices());

@@ -19,6 +19,14 @@ import java.util.Map;
 import java.util.Set;
 
 /** Manages nearby chunk meshes and their render passes. */
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.atomic.AtomicInteger;
+
+/** Manages nearby chunk meshes, asynchronous snapshot building, and GPU uploads. */
 public final class ChunkMeshManager {
     private static final Logger LOGGER = LogManager.getLogger("ArgentumForge");
     private static final long FAILED_REBUILD_RETRY_TICKS = 20L;
@@ -27,6 +35,23 @@ public final class ChunkMeshManager {
     private final Map<Long, ChunkMesh> meshes = new HashMap<Long, ChunkMesh>();
     private final Set<Long> dirtyChunks = new HashSet<Long>();
     private final Map<Long, Long> retryAfterTick = new HashMap<Long, Long>();
+    private final Map<Long, Long> chunkRevisions = new ConcurrentHashMap<Long, Long>();
+    private final ConcurrentLinkedQueue<BuildResult> completedBuilds = new ConcurrentLinkedQueue<BuildResult>();
+
+    private final ExecutorService workerExecutor = Executors.newFixedThreadPool(
+            Math.max(1, Runtime.getRuntime().availableProcessors() - 1),
+            new ThreadFactory() {
+                private final AtomicInteger count = new AtomicInteger(1);
+                @Override
+                public Thread newThread(Runnable r) {
+                    Thread t = new Thread(r, "ArgentumMeshWorker-" + count.getAndIncrement());
+                    t.setDaemon(true);
+                    t.setPriority(Thread.NORM_PRIORITY - 1);
+                    return t;
+                }
+            }
+    );
+
     private SimpleFrustumCuller culler = new SimpleFrustumCuller(8);
     private boolean enabled;
     private int lastCenterX = Integer.MIN_VALUE;
@@ -59,6 +84,8 @@ public final class ChunkMeshManager {
                 long id = ChunkCoord.key(chunkX + dx, chunkZ + dz);
                 retryAfterTick.remove(id);
                 dirtyChunks.add(id);
+                Long currentRev = chunkRevisions.get(id);
+                chunkRevisions.put(id, Long.valueOf((currentRev != null ? currentRev.longValue() : 0L) + 1L));
             }
         }
     }
@@ -77,23 +104,29 @@ public final class ChunkMeshManager {
     public void rebuildChunk(int chunkX, int chunkZ, World world) {
         if (world == null || !world.getChunkProvider().chunkExists(chunkX, chunkZ)) return;
         long id = ChunkCoord.key(chunkX, chunkZ);
-        ChunkMesh replacement = new ChunkMesh(chunkX, chunkZ);
-        try {
-            replacement.build(world);
-        } catch (RuntimeException failure) {
-            replacement.dispose();
-            ChunkMesh stale = meshes.remove(id);
-            if (stale != null) stale.dispose();
-            dirtyChunks.remove(id);
-            retryAfterTick.put(id, Long.valueOf(clientTick + FAILED_REBUILD_RETRY_TICKS));
-            LOGGER.warn("Custom chunk mesh rebuild failed for chunk {}, {}; vanilla terrain remains available", chunkX, chunkZ, failure);
-            return;
-        }
+        Long rev = chunkRevisions.get(id);
+        long targetRev = rev != null ? rev.longValue() : 1L;
 
-        ChunkMesh previous = meshes.put(id, replacement);
-        if (previous != null) previous.dispose();
-        dirtyChunks.remove(id);
-        retryAfterTick.remove(id);
+        try {
+            final ChunkSnapshot snapshot = new ChunkSnapshot(world, chunkX, chunkZ, targetRev);
+            dirtyChunks.remove(id);
+            retryAfterTick.remove(id);
+
+            workerExecutor.submit(new Runnable() {
+                @Override
+                public void run() {
+                    try {
+                        BlockFaceMesher mesher = new BlockFaceMesher();
+                        BlockFaceMesher.MeshData data = mesher.buildChunkMesh(world, snapshot.getChunkX(), snapshot.getChunkZ());
+                        completedBuilds.add(new BuildResult(id, snapshot.getChunkX(), snapshot.getChunkZ(), snapshot.getRevision(), data, null));
+                    } catch (Throwable t) {
+                        completedBuilds.add(new BuildResult(id, snapshot.getChunkX(), snapshot.getChunkZ(), snapshot.getRevision(), null, t));
+                    }
+                }
+            });
+        } catch (Throwable t) {
+            retryAfterTick.put(id, Long.valueOf(clientTick + FAILED_REBUILD_RETRY_TICKS));
+        }
     }
 
     public void onWorldChanged(World world) {
@@ -118,6 +151,7 @@ public final class ChunkMeshManager {
 
         clientTick++;
         onWorldChanged(mc.theWorld);
+        processCompletedBuilds();
         int centerX = MathHelper.floor_double(mc.thePlayer.posX) >> 4;
         int centerZ = MathHelper.floor_double(mc.thePlayer.posZ) >> 4;
         World world = mc.theWorld;
@@ -262,16 +296,62 @@ public final class ChunkMeshManager {
         return result;
     }
 
+    private void processCompletedBuilds() {
+        BuildResult result;
+        while ((result = completedBuilds.poll()) != null) {
+            long id = result.id;
+            Long currentRev = chunkRevisions.get(id);
+
+            if (result.error != null) {
+                ChunkMesh stale = meshes.remove(id);
+                if (stale != null) stale.dispose();
+                retryAfterTick.put(id, Long.valueOf(clientTick + FAILED_REBUILD_RETRY_TICKS));
+                LOGGER.warn("Custom chunk mesh rebuild failed for chunk {}, {}; vanilla terrain remains available", result.chunkX, result.chunkZ, result.error);
+                continue;
+            }
+
+            if (currentRev != null && currentRev.longValue() > result.revision) {
+                // Discard stale build
+                continue;
+            }
+
+            ChunkMesh replacement = new ChunkMesh(result.chunkX, result.chunkZ);
+            replacement.uploadData(result.meshData);
+            ChunkMesh previous = meshes.put(id, replacement);
+            if (previous != null) previous.dispose();
+        }
+    }
+
     public void dispose() {
         for (ChunkMesh mesh : meshes.values()) mesh.dispose();
         meshes.clear();
         dirtyChunks.clear();
         retryAfterTick.clear();
+        chunkRevisions.clear();
+        completedBuilds.clear();
         clientTick = 0L;
         lastCenterX = Integer.MIN_VALUE;
         lastCenterZ = Integer.MIN_VALUE;
         worldRef = null;
         dimension = Integer.MIN_VALUE;
+    }
+
+    private static final class BuildResult {
+        private final long id;
+        private final int chunkX;
+        private final int chunkZ;
+        private final long revision;
+        private final BlockFaceMesher.MeshData meshData;
+        private final Throwable error;
+
+        private BuildResult(long id, int chunkX, int chunkZ, long revision, BlockFaceMesher.MeshData meshData, Throwable error) {
+            this.id = id;
+            this.chunkX = chunkX;
+            this.chunkZ = chunkZ;
+            this.revision = revision;
+            this.meshData = meshData;
+            this.error = error;
+        }
     }
 
     private static final class DistanceComparator implements Comparator<Map.Entry<Long, ChunkMesh>> {
