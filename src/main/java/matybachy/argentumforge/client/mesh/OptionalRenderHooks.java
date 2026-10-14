@@ -52,7 +52,6 @@ public final class OptionalRenderHooks {
     @SubscribeEvent
     public void onRenderLivingPre(RenderLivingEvent.Pre event) {
         if (event == null || event.entity == null || event.renderer == null) return;
-
         Entity view = mc != null ? mc.getRenderViewEntity() : null;
         if (!(event.entity instanceof EntityLivingBase) || view == null) return;
         if (event.entity == view) return;
@@ -124,7 +123,6 @@ public final class OptionalRenderHooks {
     }
 
     public boolean useItemHooks() {
-        // Item rendering remains vanilla fallback-only in this pass.
         return false;
     }
 
@@ -133,7 +131,6 @@ public final class OptionalRenderHooks {
     }
 
     public boolean useBlockEntityHooks() {
-        // TESR/block-entity rendering remains vanilla fallback-only in this pass.
         return false;
     }
 

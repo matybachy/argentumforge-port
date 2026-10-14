@@ -51,13 +51,11 @@ public final class ForgeOptionalEffectPipeline implements OptionalEffectPipeline
             disableDueToFailure();
             return;
         }
-
         Minecraft mc = Minecraft.getMinecraft();
         if (mc == null || effectBuffer == null) {
             restoreMainBuffer();
             return;
         }
-
         boolean depthWasEnabled = GL11.glIsEnabled(GL11.GL_DEPTH_TEST);
         boolean alphaWasEnabled = GL11.glIsEnabled(GL11.GL_ALPHA_TEST);
         try {
