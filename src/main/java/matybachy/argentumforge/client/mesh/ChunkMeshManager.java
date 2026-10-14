@@ -5,6 +5,8 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.entity.Entity;
 import net.minecraft.util.MathHelper;
 import net.minecraft.world.World;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -18,15 +20,20 @@ import java.util.Set;
 
 /** Manages nearby chunk meshes and their render passes. */
 public final class ChunkMeshManager {
+    private static final Logger LOGGER = LogManager.getLogger("ArgentumForge");
+    private static final long FAILED_REBUILD_RETRY_TICKS = 20L;
+
     private final Minecraft mc = Minecraft.getMinecraft();
     private final Map<Long, ChunkMesh> meshes = new HashMap<Long, ChunkMesh>();
     private final Set<Long> dirtyChunks = new HashSet<Long>();
+    private final Map<Long, Long> retryAfterTick = new HashMap<Long, Long>();
     private SimpleFrustumCuller culler = new SimpleFrustumCuller(8);
     private boolean enabled;
     private int lastCenterX = Integer.MIN_VALUE;
     private int lastCenterZ = Integer.MIN_VALUE;
     private World worldRef;
     private int dimension = Integer.MIN_VALUE;
+    private long clientTick;
 
     private int getActiveRadius() {
         return ArgentumConfig.renderChunkRadius;
@@ -49,7 +56,9 @@ public final class ChunkMeshManager {
     public void markDirty(int chunkX, int chunkZ, int radius) {
         for (int dx = -radius; dx <= radius; dx++) {
             for (int dz = -radius; dz <= radius; dz++) {
-                dirtyChunks.add(ChunkCoord.key(chunkX + dx, chunkZ + dz));
+                long id = ChunkCoord.key(chunkX + dx, chunkZ + dz);
+                retryAfterTick.remove(id);
+                dirtyChunks.add(id);
             }
         }
     }
@@ -68,13 +77,23 @@ public final class ChunkMeshManager {
     public void rebuildChunk(int chunkX, int chunkZ, World world) {
         if (world == null || !world.getChunkProvider().chunkExists(chunkX, chunkZ)) return;
         long id = ChunkCoord.key(chunkX, chunkZ);
-        ChunkMesh old = meshes.remove(id);
-        if (old != null) old.dispose();
+        ChunkMesh replacement = new ChunkMesh(chunkX, chunkZ);
+        try {
+            replacement.build(world);
+        } catch (RuntimeException failure) {
+            replacement.dispose();
+            ChunkMesh stale = meshes.remove(id);
+            if (stale != null) stale.dispose();
+            dirtyChunks.remove(id);
+            retryAfterTick.put(id, Long.valueOf(clientTick + FAILED_REBUILD_RETRY_TICKS));
+            LOGGER.warn("Custom chunk mesh rebuild failed for chunk {}, {}; vanilla terrain remains available", chunkX, chunkZ, failure);
+            return;
+        }
 
-        ChunkMesh mesh = new ChunkMesh(chunkX, chunkZ);
-        mesh.build(world);
-        meshes.put(id, mesh);
+        ChunkMesh previous = meshes.put(id, replacement);
+        if (previous != null) previous.dispose();
         dirtyChunks.remove(id);
+        retryAfterTick.remove(id);
     }
 
     public void onWorldChanged(World world) {
@@ -91,11 +110,13 @@ public final class ChunkMeshManager {
         ChunkMesh mesh = meshes.remove(id);
         if (mesh != null) mesh.dispose();
         dirtyChunks.remove(id);
+        retryAfterTick.remove(id);
     }
 
     public void onTick() {
         if (!enabled || mc.theWorld == null || mc.thePlayer == null) return;
 
+        clientTick++;
         onWorldChanged(mc.theWorld);
         int centerX = MathHelper.floor_double(mc.thePlayer.posX) >> 4;
         int centerZ = MathHelper.floor_double(mc.thePlayer.posZ) >> 4;
@@ -107,7 +128,11 @@ public final class ChunkMeshManager {
                 int cx = centerX + dx;
                 int cz = centerZ + dz;
                 long key = ChunkCoord.key(cx, cz);
-                if (!meshes.containsKey(key)) dirtyChunks.add(key);
+                if (world.getChunkProvider().chunkExists(cx, cz)
+                        && !meshes.containsKey(key)
+                        && !isWaitingToRetry(key)) {
+                    dirtyChunks.add(key);
+                }
             }
         }
 
@@ -116,6 +141,7 @@ public final class ChunkMeshManager {
             lastCenterZ = centerZ;
             unloadOutside(centerX, centerZ);
         }
+        prunePending(centerX, centerZ, activeRadius + 1);
 
         List<Long> sorted = prioritizedDirty(centerX, centerZ, activeRadius + 1);
         int rebuilt = 0;
@@ -124,7 +150,9 @@ public final class ChunkMeshManager {
             if (rebuilt >= budget) break;
             int cx = ChunkCoord.chunkX(id.longValue());
             int cz = ChunkCoord.chunkZ(id.longValue());
-            if (Math.abs(cx - centerX) <= activeRadius && Math.abs(cz - centerZ) <= activeRadius) {
+            if (Math.abs(cx - centerX) <= activeRadius
+                    && Math.abs(cz - centerZ) <= activeRadius
+                    && world.getChunkProvider().chunkExists(cx, cz)) {
                 rebuildChunk(cx, cz, world);
                 rebuilt++;
             }
@@ -136,7 +164,9 @@ public final class ChunkMeshManager {
         for (Long id : dirtyChunks) {
             int cx = ChunkCoord.chunkX(id.longValue());
             int cz = ChunkCoord.chunkZ(id.longValue());
-            if (ChunkCoord.isWithinRadius(centerX, centerZ, cx, cz, candidateRadius)) {
+            if (Math.abs(cx - centerX) <= candidateRadius
+                    && Math.abs(cz - centerZ) <= candidateRadius
+                    && !isWaitingToRetry(id.longValue())) {
                 ids.add(id);
             }
         }
@@ -153,6 +183,32 @@ public final class ChunkMeshManager {
 
     private double distanceSq(long id, int centerX, int centerZ) {
         return ChunkCoord.distanceSq(ChunkCoord.chunkX(id), ChunkCoord.chunkZ(id), centerX, centerZ);
+    }
+
+    private boolean isWaitingToRetry(long id) {
+        Long retryTick = retryAfterTick.get(Long.valueOf(id));
+        if (retryTick == null) return false;
+        if (clientTick < retryTick.longValue()) return true;
+        retryAfterTick.remove(Long.valueOf(id));
+        return false;
+    }
+
+    private void prunePending(int centerX, int centerZ, int radius) {
+        for (Iterator<Long> it = dirtyChunks.iterator(); it.hasNext();) {
+            long id = it.next().longValue();
+            if (Math.abs(ChunkCoord.chunkX(id) - centerX) > radius
+                    || Math.abs(ChunkCoord.chunkZ(id) - centerZ) > radius) {
+                it.remove();
+                retryAfterTick.remove(Long.valueOf(id));
+            }
+        }
+        for (Iterator<Long> it = retryAfterTick.keySet().iterator(); it.hasNext();) {
+            long id = it.next().longValue();
+            if (Math.abs(ChunkCoord.chunkX(id) - centerX) > radius
+                    || Math.abs(ChunkCoord.chunkZ(id) - centerZ) > radius) {
+                it.remove();
+            }
+        }
     }
 
     private void unloadOutside(int centerX, int centerZ) {
@@ -176,7 +232,6 @@ public final class ChunkMeshManager {
         GLState.pushRenderState();
         GLState.pushMatrix();
         try {
-            GLState.translate(-view.posX, -view.posY, -view.posZ);
             GLState.beginOpaquePass();
             for (Map.Entry<Long, ChunkMesh> entry : visible) entry.getValue().renderSolid();
 
@@ -206,6 +261,8 @@ public final class ChunkMeshManager {
         for (ChunkMesh mesh : meshes.values()) mesh.dispose();
         meshes.clear();
         dirtyChunks.clear();
+        retryAfterTick.clear();
+        clientTick = 0L;
         lastCenterX = Integer.MIN_VALUE;
         lastCenterZ = Integer.MIN_VALUE;
         worldRef = null;

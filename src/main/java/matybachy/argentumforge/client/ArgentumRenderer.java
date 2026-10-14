@@ -32,7 +32,8 @@ public class ArgentumRenderer {
         if (view == null) return;
 
         boolean effectStarted = false;
-        GL11.glPushAttrib(GL11.GL_ENABLE_BIT | GL11.GL_COLOR_BUFFER_BIT | GL11.GL_DEPTH_BUFFER_BIT);
+        GL11.glPushAttrib(GL11.GL_ENABLE_BIT | GL11.GL_COLOR_BUFFER_BIT | GL11.GL_DEPTH_BUFFER_BIT
+                | GL11.GL_TEXTURE_BIT | GL11.GL_CURRENT_BIT);
         GL11.glPushMatrix();
         try {
             optionalHooks.onBeforeTerrainRender();
@@ -51,9 +52,9 @@ public class ArgentumRenderer {
             GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
             GL11.glDisable(GL11.GL_CULL_FACE);
 
-            double px = view.posX;
-            double py = view.posY;
-            double pz = view.posZ;
+            double px = view.lastTickPosX + (view.posX - view.lastTickPosX) * event.partialTicks;
+            double py = view.lastTickPosY + (view.posY - view.lastTickPosY) * event.partialTicks;
+            double pz = view.lastTickPosZ + (view.posZ - view.lastTickPosZ) * event.partialTicks;
             GL11.glTranslated(-px, -py, -pz);
 
             if (meshManager != null) {

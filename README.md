@@ -5,17 +5,17 @@ Experimental Forge 1.8.9 port of Argentum, built as a separate mod project in th
 ## Current scope
 - Forge 1.8.9 / Java 8 / LWJGL 2 target
 - Independent mod ID: `argentumforge`
-- Client render hook via `RenderWorldLastEvent`
-- Chunk renderer prototype with solid/cutout/translucent passes and chunk lifecycle hooks
-- Terrain atlas binding, baked-model quad meshing, conservative fluid geometry, lighting/AO approximation, and VBO reuse
-- Conservative chunk visibility culling and chunk VBO buffer reuse
+- Late custom terrain overlay through `RenderWorldLastEvent`; vanilla terrain compilation and drawing remain active
+- Experimental solid/cutout/translucent mesh prototype with chunk lifecycle hooks; it is not a replacement terrain renderer
+- Terrain atlas binding, baked-model quad extraction, approximate fluid geometry and lighting/AO, and VBO reuse
+- Chunk-radius and horizontal-direction visibility heuristic; there is no camera-plane frustum or occlusion culling
 - Optional living-entity distance culling with compatibility guards
-- Optional dropped-item distance culling and particle throttling with restoration behavior
+- Optional dropped-item distance adjustment and particle throttling with restoration behavior
 - Optional cloud layer renderer, active only when vanilla clouds are disabled and no custom sky renderer is active
-- Optional conservative weather renderer replacement with distance/frustum filtering and automatic vanilla/provider fallback
-- Optional capability-gated framebuffer composite/tint pass with render-thread and failure safety
+- Optional weather renderer approximation with distance and horizontal-forward filtering plus provider fallback
+- Optional capability-gated framebuffer composite/tint pass for the late custom overlay, with render-thread and failure handling
 - FeatherOpt detection without a hard class-linkage dependency; no FeatherOpt source is vendored or modified
-- Vanilla fallback preserved; experimental renderer and optional features are disabled by default
+- The vanilla renderer remains active; the experimental overlay and optional features are disabled by default
 
 ## Repository status
 This repository is an experimental Forge 1.8.9 port, not full upstream Argentum/Celeritas parity. The project is kept separate from upstream repositories, which are used as read-only references.
@@ -44,11 +44,10 @@ The generated Forge config controls renderer behavior. Relevant settings include
 - Terrain: `enableLightingAo`, `enableTransparency`, `enableModelFallback`
 - Optional effects: `enableOptionalEffects`, `optionalEffectsCompositeAlpha`, `optionalEffectsTintRed`, `optionalEffectsTintGreen`, `optionalEffectsTintBlue`
 - Entities: `enableEntityHooks`, `enableEntityDistanceCulling`, `entityCullingDistance`
-- Items: `enableItemHooks`, `enableItemDistanceCulling`, `itemCullingDistance`
+- Dropped items: `enableItemHooks`, `enableItemDistanceCulling`, `itemCullingDistance`
 - Particles: `enableParticleHooks`, `particleThrottleSetting`
 - Clouds: `enableCloudHooks`, `enableCloudRenderer`, `cloudRenderRadiusBlocks`
 - Weather: `enableWeatherHooks`, `weatherRenderRadiusBlocks`, `weatherFrustumMinDotPercent`
-- Block entities: `enableBlockEntityHooks`, `enableBlockEntityDistanceCulling`
 
 Optional features use conservative settings and remain disabled by default unless explicitly enabled.
 
@@ -56,7 +55,10 @@ Optional features use conservative settings and remain disabled by default unles
 - This is not full upstream Argentum parity.
 - Lighting, ambient occlusion, fluid geometry, and translucent ordering are conservative Forge 1.8.9 approximations.
 - Model access or decoding failures use conservative fallback geometry.
-- Item optimization is partial; block-entity optimization remains fallback-only.
+- Item distance adjustment is partial. Block-entity optimization is not implemented.
+- Chunk building is synchronous on the client tick and uses mutable live world state.
+- Forge place/break events and chunk/world lifecycle events do not observe every possible direct modded world mutation.
+- VBO overlay draw occurs after vanilla terrain and can duplicate it; no performance improvement has been measured.
 - Weather rendering approximates vanilla rain/snow visuals and is not full visual parity.
 - The cloud renderer uses a conservative flat cloud layer and avoids running alongside vanilla clouds or a custom sky renderer.
 - Post-processing is a framebuffer composite/tint pass, not a modern shader chain.

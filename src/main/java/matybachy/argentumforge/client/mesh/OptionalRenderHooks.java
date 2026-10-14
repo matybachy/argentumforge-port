@@ -3,6 +3,7 @@ package matybachy.argentumforge.client.mesh;
 import matybachy.argentumforge.ArgentumConfig;
 import matybachy.argentumforge.ArgentumForge;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.multiplayer.WorldClient;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.item.EntityItem;
 import net.minecraft.entity.EntityLiving;
@@ -21,8 +22,8 @@ public final class OptionalRenderHooks {
     private final Map<EntityItem, Double> originalItemRenderDistanceWeights =
             new WeakHashMap<EntityItem, Double>();
     private Integer originalParticleSetting;
-    private boolean blockEntityHookSupportChecked;
-    private boolean blockEntityHookSupported;
+    private int lastAppliedParticleSetting = -1;
+    private WorldClient itemWorld;
 
     public void onBeforeTerrainRender() {
     }
@@ -37,16 +38,28 @@ public final class OptionalRenderHooks {
         weatherController.onClientTick();
         if (mc == null || mc.gameSettings == null) return;
 
+        WorldClient currentWorld = mc.theWorld;
+        if (itemWorld != currentWorld) {
+            restoreItemRenderDistanceWeights();
+            itemWorld = currentWorld;
+        }
+
         if (!ArgentumForge.ENABLE_EXPERIMENTAL_CHUNK_RENDERER || !ArgentumConfig.enableParticleHooks) {
             restoreParticleSetting();
         } else {
             if (originalParticleSetting == null) {
                 originalParticleSetting = Integer.valueOf(mc.gameSettings.particleSetting);
+            } else if (lastAppliedParticleSetting >= 0
+                    && mc.gameSettings.particleSetting != lastAppliedParticleSetting) {
+                // Preserve a setting change made by the user while throttling is active.
+                originalParticleSetting = Integer.valueOf(mc.gameSettings.particleSetting);
             }
-            mc.gameSettings.particleSetting = RenderOptimizationMath.throttledParticleSetting(
+            int appliedSetting = RenderOptimizationMath.throttledParticleSetting(
                     mc.gameSettings.particleSetting,
                     ArgentumConfig.particleThrottleSetting
             );
+            mc.gameSettings.particleSetting = appliedSetting;
+            lastAppliedParticleSetting = appliedSetting;
         }
 
         if (!ArgentumForge.ENABLE_EXPERIMENTAL_CHUNK_RENDERER
@@ -56,20 +69,13 @@ public final class OptionalRenderHooks {
         } else {
             applyItemDistanceCulling();
         }
-
-        if (!ArgentumForge.ENABLE_EXPERIMENTAL_CHUNK_RENDERER
-                || !ArgentumConfig.enableBlockEntityHooks
-                || !ArgentumConfig.enableBlockEntityDistanceCulling) {
-            return;
-        }
-
-        ensureBlockEntityHookSupportChecked();
     }
 
     private void restoreParticleSetting() {
         if (mc == null || mc.gameSettings == null || originalParticleSetting == null) return;
         mc.gameSettings.particleSetting = RenderOptimizationMath.clampedParticleSetting(originalParticleSetting.intValue());
         originalParticleSetting = null;
+        lastAppliedParticleSetting = -1;
     }
 
     @SubscribeEvent
@@ -122,7 +128,7 @@ public final class OptionalRenderHooks {
         int baseX = MathHelper.floor_double(view.posX / step) * step;
         int baseZ = MathHelper.floor_double(view.posZ / step) * step;
 
-        GL11.glPushAttrib(GL11.GL_ENABLE_BIT | GL11.GL_COLOR_BUFFER_BIT);
+        GL11.glPushAttrib(GL11.GL_ENABLE_BIT | GL11.GL_COLOR_BUFFER_BIT | GL11.GL_CURRENT_BIT);
         try {
             GL11.glDisable(GL11.GL_TEXTURE_2D);
             GL11.glEnable(GL11.GL_BLEND);
@@ -184,21 +190,6 @@ public final class OptionalRenderHooks {
         originalItemRenderDistanceWeights.clear();
     }
 
-    private void ensureBlockEntityHookSupportChecked() {
-        if (blockEntityHookSupportChecked) return;
-        blockEntityHookSupportChecked = true;
-        blockEntityHookSupported = hasClass("net.minecraftforge.client.event.RenderTileEntityEvent$Pre");
-    }
-
-    private boolean hasClass(String className) {
-        try {
-            Class.forName(className);
-            return true;
-        } catch (ClassNotFoundException ignored) {
-            return false;
-        }
-    }
-
     public boolean useEntityHooks() {
         return ArgentumForge.ENABLE_EXPERIMENTAL_CHUNK_RENDERER && ArgentumConfig.enableEntityHooks;
     }
@@ -217,14 +208,6 @@ public final class OptionalRenderHooks {
 
     public boolean useParticleHooks() {
         return ArgentumForge.ENABLE_EXPERIMENTAL_CHUNK_RENDERER && ArgentumConfig.enableParticleHooks;
-    }
-
-    public boolean useBlockEntityHooks() {
-        ensureBlockEntityHookSupportChecked();
-        return ArgentumForge.ENABLE_EXPERIMENTAL_CHUNK_RENDERER
-                && ArgentumConfig.enableBlockEntityHooks
-                && (!ArgentumConfig.enableBlockEntityDistanceCulling
-                || RenderOptimizationMath.isBlockEntityOptimizationSupported(blockEntityHookSupported));
     }
 
     private boolean canUseCloudFallbackRenderer() {

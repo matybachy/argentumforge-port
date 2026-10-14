@@ -1,10 +1,12 @@
 package matybachy.argentumforge.client.mesh;
 
 import net.minecraft.world.World;
+import net.minecraft.client.Minecraft;
 import net.minecraftforge.event.world.BlockEvent;
 import net.minecraftforge.event.world.ChunkEvent;
 import net.minecraftforge.event.world.WorldEvent;
 import net.minecraftforge.common.util.BlockSnapshot;
+import net.minecraftforge.client.event.TextureStitchEvent;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
@@ -27,6 +29,14 @@ public final class ClientWorldHooks {
     @SubscribeEvent
     public void onWorldUnload(WorldEvent.Unload event) {
         if (event.world != null && event.world.isRemote) manager.dispose();
+    }
+
+    @SubscribeEvent
+    public void onBlockTextureStitch(TextureStitchEvent.Post event) {
+        Minecraft mc = Minecraft.getMinecraft();
+        if (event != null && mc != null && event.map == mc.getTextureMapBlocks()) {
+            manager.dispose();
+        }
     }
 
     @SubscribeEvent
