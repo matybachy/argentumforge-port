@@ -17,7 +17,9 @@ import java.util.WeakHashMap;
 
 public final class OptionalRenderHooks {
     private final Minecraft mc = Minecraft.getMinecraft();
-    private final Map<EntityItem, Double> originalItemRenderDistanceWeights = new WeakHashMap<EntityItem, Double>();
+    private final WeatherRendererController weatherController = new WeatherRendererController();
+    private final Map<EntityItem, Double> originalItemRenderDistanceWeights =
+            new WeakHashMap<EntityItem, Double>();
     private Integer originalParticleSetting;
     private boolean blockEntityHookSupportChecked;
     private boolean blockEntityHookSupported;
@@ -26,10 +28,13 @@ public final class OptionalRenderHooks {
     }
 
     public void onAfterTerrainRender() {
-        if (canUseCloudFallbackRenderer()) renderCloudLayer();
+        if (canUseCloudFallbackRenderer()) {
+            renderCloudLayer();
+        }
     }
 
     public void onClientTick() {
+        weatherController.onClientTick();
         if (mc == null || mc.gameSettings == null) return;
 
         if (!ArgentumForge.ENABLE_EXPERIMENTAL_CHUNK_RENDERER || !ArgentumConfig.enableParticleHooks) {
@@ -72,7 +77,6 @@ public final class OptionalRenderHooks {
         if (!ArgentumForge.ENABLE_EXPERIMENTAL_CHUNK_RENDERER) return;
         if (!ArgentumConfig.enableEntityHooks || !ArgentumConfig.enableEntityDistanceCulling) return;
         if (event == null || event.entity == null || event.renderer == null) return;
-
         Entity view = mc != null ? mc.getRenderViewEntity() : null;
         if (!(event.entity instanceof EntityLivingBase) || view == null) return;
         if (!event.entity.getClass().getName().startsWith("net.minecraft.entity.")) return;
@@ -118,22 +122,26 @@ public final class OptionalRenderHooks {
         int baseX = MathHelper.floor_double(view.posX / step) * step;
         int baseZ = MathHelper.floor_double(view.posZ / step) * step;
 
-        GL11.glDisable(GL11.GL_TEXTURE_2D);
-        GL11.glEnable(GL11.GL_BLEND);
-        GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
-        GL11.glColor4f(0.95f, 0.95f, 0.98f, 0.24f);
-        GL11.glBegin(GL11.GL_QUADS);
-        for (int x = baseX - radius; x < baseX + radius; x += step) {
-            for (int z = baseZ - radius; z < baseZ + radius; z += step) {
-                GL11.glVertex3f(x, cloudY, z);
-                GL11.glVertex3f(x + step, cloudY, z);
-                GL11.glVertex3f(x + step, cloudY, z + step);
-                GL11.glVertex3f(x, cloudY, z + step);
+        GL11.glPushAttrib(GL11.GL_ENABLE_BIT | GL11.GL_COLOR_BUFFER_BIT);
+        try {
+            GL11.glDisable(GL11.GL_TEXTURE_2D);
+            GL11.glEnable(GL11.GL_BLEND);
+            GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
+            GL11.glColor4f(0.95f, 0.95f, 0.98f, 0.24f);
+            GL11.glBegin(GL11.GL_QUADS);
+            for (int x = baseX - radius; x < baseX + radius; x += step) {
+                for (int z = baseZ - radius; z < baseZ + radius; z += step) {
+                    GL11.glVertex3f(x, cloudY, z);
+                    GL11.glVertex3f(x + step, cloudY, z);
+                    GL11.glVertex3f(x + step, cloudY, z + step);
+                    GL11.glVertex3f(x, cloudY, z + step);
+                }
             }
+            GL11.glEnd();
+        } finally {
+            GL11.glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
+            GL11.glPopAttrib();
         }
-        GL11.glEnd();
-        GL11.glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
-        GL11.glEnable(GL11.GL_TEXTURE_2D);
     }
 
     private void applyItemDistanceCulling() {

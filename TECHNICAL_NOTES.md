@@ -1,86 +1,70 @@
 # Technical Notes
 
 ## Target environment
-- Minecraft: 1.8.9
-- Forge: 11.15.1.2318 (targeted and validated by the build system)
-- Java: 8
-- Graphics runtime: standard LWJGL 2
-- Loader: Forge only; no Fabric or Ornithe runtime is required or assumed
+- Minecraft 1.8.9
+- Forge 11.15.1.2318
+- Java 8
+- LWJGL 2
+- Forge-only runtime; no Fabric or Ornithe runtime is assumed
 
-## Upstream references used
-- Argentum: https://github.com/QuicksilverMC/Argentum
-- Celeritas: https://github.com/GTNewHorizons/Celeritas
+## Current implementation
+The project contains a staged Forge renderer with:
 
-These are treated as read-only architecture references only. No upstream code is committed to this repository.
+- baked-model terrain meshing and conservative fallback geometry
+- world-light/AO approximation
+- bounded chunk rebuild scheduling and invalidation hooks
+- conservative chunk visibility culling and reusable VBOs
+- opt-in entity culling and particle throttling
+- opt-in cloud rendering with custom-sky fallback
+- opt-in weather replacement with distance/frustum filtering
+- capability/thread-gated framebuffer composite/tint effects
+- explicit vanilla fallback paths
 
-## Important compatibility constraints
-The upstream Argentum renderer is written for a different rendering stack than standard Forge 1.8.9. It relies on modern rendering abstractions, shader systems, and render-device/tooling patterns that do not map 1:1 to standard Minecraft Forge 1.8.9. The main compatibility issues are:
+## PR #9 compatibility decisions
+Weather rendering is installed only when the experimental renderer and weather hook are enabled. A non-null provider weather renderer is treated as custom and is never replaced. The controller removes only the renderer instance it installed. World changes, disabling the option, or renderer failure restore the provider's vanilla/null path.
 
-- modern GL abstractions and shader framework concepts not present in vanilla MC 1.8.9
-- newer model/resource patterns not available in standard Forge 1.8.9
-- custom Embeddium/Celeritas integration points not available in a standalone Forge mod
-- instancing and GPU-resource patterns that must be adapted for LWJGL2 and the target mappings
+The weather renderer performs render-only filtering. It does not modify rain strength, snow state, biome state, or gameplay behavior. Its output remains an approximation and requires client comparison against vanilla.
 
 ## Current implementation status
 This repository currently includes:
-- a Forge 1.8.9 mod project skeleton
-- Java 8-compatible Gradle build setup
-- client hook via RenderWorldLastEvent
-- a VBO-based chunk renderer with solid/cutout/translucent passes
-- texture-atlas binding (`TextureMap.locationBlocksTexture`) and baked-model/state/default-state sprite lookup before missing-sprite fallback
-- baked-model quad decoding for block geometry, with state-aware bounds/collision-shape fallback and conservative geometry if model access/decoding fails
-- world-light + lightweight AO sampling for per-vertex brightness approximation (including emissive full-bright fallback and corner-neighbor AO smoothing)
-- conservative model fallback geometry (block bounds, crossed quads for plant-like blocks, fluid corner heights + side/bottom faces)
-- prioritized, bounded chunk rebuild scheduling with world/chunk/block invalidation hooks (including MultiPlace updates and edge-neighbor dirtying)
-- conservative chunk visibility culling with radius checks plus directional backface rejection for distant chunks
-- reusable chunk VBO allocation strategy that updates in-place when capacity permits
-- optional living-entity distance culling hooks with compatibility guards (opt-in and disabled by default)
-- optional dropped-item distance culling and particle throttling hooks (opt-in and disabled by default)
-- optional conservative cloud layer rendering (opt-in; active only when vanilla clouds are disabled and no custom sky renderer is present)
-- optional capability-gated framebuffer composite effect pipeline with failure self-disable fallback and client-thread gating (no worker-thread GL calls)
-- compatibility interfaces for texture lookup, lighting, GPU buffers, and optional effects
+- A Forge 1.8.9 mod project skeleton and Java 8-compatible Gradle setup
+- A client hook via `RenderWorldLastEvent`
+- A VBO-based chunk renderer with solid/cutout/translucent passes
+- Texture-atlas binding and baked-model/state/default-state sprite lookup before missing-sprite fallback
+- Baked-model quad decoding with state-aware bounds/collision-shape fallback
+- World-light and lightweight AO sampling for approximate vertex brightness
+- Conservative geometry fallback for unsupported or missing model data
+- Bounded chunk rebuild scheduling and world/chunk/block invalidation hooks
+- Conservative chunk visibility culling and reusable chunk VBO buffers
+- Optional living-entity culling, dropped-item culling, and particle throttling
+- Optional cloud rendering with vanilla/custom-sky fallback
+- Optional weather replacement with distance/frustum filtering and vanilla/provider fallback
+- Optional framebuffer composite effects with failure self-disable behavior and render-thread gating
+- Compatibility interfaces for texture lookup, lighting, GPU buffers, and optional effects
 
-This is intentionally a staged prototype and not a full Argentu m-equivalent renderer yet.
+## Optional framebuffer path
+The optional framebuffer path:
+- requires framebuffer support and the client render thread
+- allocates/resizes its own buffer defensively
+- attempts to return to the main framebuffer before and after compositing
+- restores the depth-test and alpha-test enable states after compositing
+- resets color and depth-write state after compositing
+- self-disables and falls back when allocation or rendering fails
 
-## Planned porting strategy
-1. Build a correct Forge 1.8.9 terrain path with chunk meshing, rebuild scheduling and camera-relative rendering
-2. Separate render layers and add correct block visibility checks
-3. Add texture/UV mapping and lighting/AO
-4. Add chunk resource reuse and safe cleanup
-5. Port higher-level effects such as clouds, weather, instancing, and item/entity optimizations in smaller steps
-6. Keep vanilla terrain as fallback until the experimental path is stable
+## Validation
+Run the pure-Java tests and the ForgeGradle build in a Java 8 environment. Then test separately:
 
-## Render prototype notes
-The current prototype intentionally avoids claiming full terrain correctness. It is used to validate:
-- Forge client event integration
-- OpenGL rendering with LWJGL2
-- VBO upload and draw calls
-- camera-relative transforms
-- chunk mesh generation and bounded rebuild processing on the client thread
-- stable fallback behavior when model/texture resolution is unavailable
+1. Forge without FeatherOpt or OptiFine.
+2. FeatherOpt with OptiFine disabled.
+3. FeatherOpt with OptiFine enabled, if supported by the installed client.
 
-## Validation steps
-Runtime validation should be performed in a real 1.8.9 client session:
-1. Enable `enableExperimentalRenderer=true` in the generated config file.
-2. Start client and load a world.
-3. Verify terrain in all three passes (solid/cutout/translucent), including water/glass/leaves.
-4. Validate representative model-heavy blocks (stairs/slabs/fences/panes/doors/trapdoors/rails/ladders/buttons/plates/plants/signs) against vanilla output.
-5. Place/break blocks near chunk borders and verify dirty rebuilds.
-6. Change dimension and verify mesh disposal/rebuild without stale VBOs.
+No runtime client result should be claimed until those configurations are actually launched.
 
-## Current truth-in-advertising status
-- Implemented: baked-model quad meshing path with safe fallback for unsupported/missing model data.
-- Partially implemented: fluid shape/UV parity and smooth-light/AO parity (current implementation is conservative and stable, not 1:1 vanilla; same-material liquid internals are now suppressed, emissive blocks remain full-bright, and AO uses local corner-neighbor sampling).
-- Partially implemented: optional performance hooks (living-entity distance culling + dropped-item distance culling + particle throttle + conservative cloud layer + framebuffer composite post pass).
-- Blocked/fallback-only in this pass: block-entity optimization, because Forge 1.8.9 does not expose a safe generic TESR pre-render hook for conservative opt-in culling without replacing renderer registrations.
-- Fallback-only in this pass: weather replacement rendering to preserve vanilla/custom renderer compatibility on Forge 1.8.9.
-- Unverified in this execution environment: real in-game visual parity/performance due unavailable runtime client validation here.
-- Platform-blocked: direct parity with upstream Argentum/Celeritas renderer abstractions beyond what Forge 1.8.9 exposes.
-
-## Known blockers
-- Upstream code makes extensive use of custom render abstractions not present in standard Forge 1.8.9.
-- A faithful 1:1 port of the entire upstream renderer is not feasible without an equivalent compatibility layer or substantial reimplementation.
-- Real runtime validation is required before any terrain-rendering feature can be called production-ready.
-
-## Risk posture
-The project remains intentionally private. The code in this repository is the working porting branch only; upstream repositories remain untouched and read-only.
+## Remaining limitations and risk posture
+- Item optimization remains partial, and block-entity optimization remains fallback-only because Forge 1.8.9 does not expose a safe generic TESR pre-render hook for conservative culling without replacing renderer registrations.
+- Weather rendering is a compatibility-first approximation, not full vanilla or upstream parity.
+- Post-processing is a guarded framebuffer composite/tint pass, not a full shader-chain implementation.
+- Fluid shape/UV parity, smooth-light/AO parity, translucent ordering, terrain visuals, and performance require real-client testing.
+- Upstream code relies on rendering abstractions that are not present in standard Forge 1.8.9. Full parity would require an equivalent compatibility layer or substantial reimplementation.
+- Runtime validation is unavailable in this repository-edit session. Do not claim production readiness or a confirmed fix for the Feather/Dawn white screen without testing the affected configurations.
+- This repository is the private development port; upstream repositories remain read-only references.

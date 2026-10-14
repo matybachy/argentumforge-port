@@ -29,8 +29,7 @@ public final class ForgeOptionalEffectPipeline implements OptionalEffectPipeline
     public void begin() {
         if (!isSupported()) return;
         Minecraft mc = Minecraft.getMinecraft();
-        if (mc == null) return;
-        if (!ensureBuffer(mc)) return;
+        if (mc == null || !ensureBuffer(mc)) return;
         try {
             mainBuffer = mc.getFramebuffer();
             effectBuffer.bindFramebuffer(true);
@@ -57,22 +56,43 @@ public final class ForgeOptionalEffectPipeline implements OptionalEffectPipeline
             restoreMainBuffer();
             return;
         }
+
+        // Keep a local reference because restoreMainBuffer() clears the field.
+        // This lets the finally block bind the main framebuffer again after compositing.
+        final Framebuffer targetMainBuffer = mainBuffer;
+        boolean depthWasEnabled = GL11.glIsEnabled(GL11.GL_DEPTH_TEST);
+        boolean alphaWasEnabled = GL11.glIsEnabled(GL11.GL_ALPHA_TEST);
         try {
             restoreMainBuffer();
             GL11.glDisable(GL11.GL_ALPHA_TEST);
             GL11.glDisable(GL11.GL_DEPTH_TEST);
             GL11.glDepthMask(false);
-            float alpha = ArgentumConfig.optionalEffectsCompositeAlpha / 100.0f;
-            GL11.glColor4f(1.0f, 1.0f, 1.0f, alpha);
+            float alpha = RenderOptimizationMath.clampedPercent(ArgentumConfig.optionalEffectsCompositeAlpha) / 100.0f;
+            float tintR = RenderOptimizationMath.clampedPercent(ArgentumConfig.optionalEffectsTintRed) / 100.0f;
+            float tintG = RenderOptimizationMath.clampedPercent(ArgentumConfig.optionalEffectsTintGreen) / 100.0f;
+            float tintB = RenderOptimizationMath.clampedPercent(ArgentumConfig.optionalEffectsTintBlue) / 100.0f;
+            GL11.glColor4f(tintR, tintG, tintB, alpha);
             effectBuffer.framebufferRenderExt(mc.displayWidth, mc.displayHeight, true);
         } catch (Throwable ignored) {
             disableDueToFailure();
         } finally {
-            restoreMainBuffer();
+            try {
+                if (targetMainBuffer != null) {
+                    targetMainBuffer.bindFramebuffer(true);
+                } else {
+                    restoreMainBuffer();
+                }
+            } catch (Throwable ignored) {
+                // The outer renderer still restores its GL attribute stack.
+            } finally {
+                mainBuffer = null;
+            }
             GL11.glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
             GL11.glDepthMask(true);
-            GL11.glEnable(GL11.GL_DEPTH_TEST);
-            GL11.glEnable(GL11.GL_ALPHA_TEST);
+            if (depthWasEnabled) GL11.glEnable(GL11.GL_DEPTH_TEST);
+            else GL11.glDisable(GL11.GL_DEPTH_TEST);
+            if (alphaWasEnabled) GL11.glEnable(GL11.GL_ALPHA_TEST);
+            else GL11.glDisable(GL11.GL_ALPHA_TEST);
         }
     }
 
@@ -90,7 +110,10 @@ public final class ForgeOptionalEffectPipeline implements OptionalEffectPipeline
         int width = Math.max(1, mc.displayWidth);
         int height = Math.max(1, mc.displayHeight);
         if (effectBuffer != null && (bufferWidth != width || bufferHeight != height)) {
-            effectBuffer.deleteFramebuffer();
+            try {
+                effectBuffer.deleteFramebuffer();
+            } catch (Throwable ignored) {
+            }
             effectBuffer = null;
             bufferWidth = -1;
             bufferHeight = -1;

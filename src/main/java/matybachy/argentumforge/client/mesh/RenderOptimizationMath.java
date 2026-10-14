@@ -50,4 +50,19 @@ public final class RenderOptimizationMath {
     public static boolean shouldRunOptionalEffects(boolean configEnabled, boolean framebufferEnabled, boolean disabledByFailure, boolean onClientThread) {
         return configEnabled && framebufferEnabled && !disabledByFailure && onClientThread;
     }
+
+    public static int clampedPercent(int value) {
+        return Math.max(0, Math.min(100, value));
+    }
+
+    public static double weatherMaxDistanceSq(int maxDistanceBlocks) {
+        double safeDistance = Math.max(1, maxDistanceBlocks);
+        return safeDistance * safeDistance;
+    }
+
+    public static boolean shouldCullWeatherColumn(double distanceSq, double maxDistanceSq, double forwardDot, double minForwardDot, double nearDistanceSq) {
+        if (distanceSq <= Math.max(0.0D, nearDistanceSq)) return false;
+        if (distanceSq > Math.max(1.0D, maxDistanceSq)) return true;
+        return forwardDot < minForwardDot;
+    }
 }

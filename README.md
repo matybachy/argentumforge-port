@@ -2,55 +2,63 @@
 
 Experimental Forge 1.8.9 port of Argentum, built as a separate mod project in this repository.
 
-Current scope
+## Current scope
 - Forge 1.8.9 / Java 8 / LWJGL 2 target
 - Independent mod ID: `argentumforge`
-- Client render hook active: `RenderWorldLastEvent`
+- Client render hook via `RenderWorldLastEvent`
 - Chunk renderer prototype with solid/cutout/translucent passes and chunk lifecycle hooks
-- Terrain atlas binding via `TextureMap.locationBlocksTexture` with state/model/default-state lookup before missing-sprite fallback
-- World-light sampling + lightweight AO approximation for face/vertex shading (including emissive full-bright fallback and corner-neighbor AO smoothing)
-- Baked-model quad meshing for vanilla block models (including slabs/stairs/fences/panes/doors/trapdoors/rails/etc.) with state-aware bounds/collision-shape fallback and conservative cross/box geometry fallback
-- Conservative fluid top/side/bottom geometry with averaged corner heights, same-material internal-face suppression, and translucent layering
-- Conservative chunk visibility culling (radius + directional backface rejection) and chunk VBO buffer reuse
-- Optional living-entity distance culling (opt-in, conservative compatibility checks, vanilla-compatible defaults)
-- Optional dropped-item distance culling and particle throttling (opt-in, conservative, vanilla-compatible defaults)
-- Optional conservative cloud layer renderer (opt-in, only active when vanilla clouds are disabled)
-- Optional capability-gated framebuffer composite pass for LWJGL2-compatible post-processing fallback with thread/runtime safety checks
-- Vanilla fallback preserved; experimental renderer is disabled by default and config-driven
+- Terrain atlas binding, baked-model quad meshing, conservative fluid geometry, lighting/AO approximation, and VBO reuse
+- Conservative chunk visibility culling and chunk VBO buffer reuse
+- Optional living-entity distance culling with compatibility guards
+- Optional dropped-item distance culling and particle throttling with restoration behavior
+- Optional cloud layer renderer, active only when vanilla clouds are disabled and no custom sky renderer is active
+- Optional conservative weather renderer replacement with distance/frustum filtering and automatic vanilla/provider fallback
+- Optional capability-gated framebuffer composite/tint pass with render-thread and failure safety
+- FeatherOpt detection without a hard class-linkage dependency; no FeatherOpt source is vendored or modified
+- Vanilla fallback preserved; experimental renderer and optional features are disabled by default
 
-Repository status
-- This repo is a working prototype, not the complete upstream Argentum feature set.
-- The project is intentionally kept private and separate from upstream repositories.
-- Upstream Argentum and Celeritas are used as read-only reference sources only.
+## Repository status
+This repository is an experimental Forge 1.8.9 port, not full upstream Argentum/Celeritas parity. The project is kept separate from upstream repositories, which are used as read-only references.
 
-Build
-- Java 8 is required.
-- Run from the repo root:
-  - ./gradlew clean build --stacktrace --no-daemon
-  - or on Windows: .\gradlew.bat clean build --stacktrace --no-daemon
+## Build
+Java 8 is required.
 
-Configuration
-- Generated config file controls renderer behavior:
-  - `enableExperimentalRenderer` (default: false)
-  - `renderChunkRadius`
-  - `rebuildBudgetPerTick`
-  - `enableLightingAo`, `enableTransparency`, `enableModelFallback`
-  - optional guarded hooks: `enableOptionalEffects`, `optionalEffectsCompositeAlpha`, `enableEntityHooks`, `enableEntityDistanceCulling`, `entityCullingDistance`, `enableItemHooks`, `enableItemDistanceCulling`, `itemCullingDistance`, `enableParticleHooks`, `particleThrottleSetting`, `enableBlockEntityHooks`, `enableBlockEntityDistanceCulling`, `enableWeatherHooks`, `enableCloudHooks`, `enableCloudRenderer`, `cloudRenderRadiusBlocks`
+On Windows:
 
-Known limits
+```text
+.\gradlew.bat clean build --stacktrace --no-daemon
+```
+
+On other platforms:
+
+```text
+./gradlew clean build --stacktrace --no-daemon
+```
+
+Building requires ForgeGradle 2.1 dependencies to be available. Do not treat a build as verified unless it has actually been run successfully.
+
+## Configuration
+The generated Forge config controls renderer behavior. Relevant settings include:
+
+- Renderer core: `enableExperimentalRenderer`, `renderChunkRadius`, `rebuildBudgetPerTick`
+- Terrain: `enableLightingAo`, `enableTransparency`, `enableModelFallback`
+- Optional effects: `enableOptionalEffects`, `optionalEffectsCompositeAlpha`, `optionalEffectsTintRed`, `optionalEffectsTintGreen`, `optionalEffectsTintBlue`
+- Entities: `enableEntityHooks`, `enableEntityDistanceCulling`, `entityCullingDistance`
+- Items: `enableItemHooks`, `enableItemDistanceCulling`, `itemCullingDistance`
+- Particles: `enableParticleHooks`, `particleThrottleSetting`
+- Clouds: `enableCloudHooks`, `enableCloudRenderer`, `cloudRenderRadiusBlocks`
+- Weather: `enableWeatherHooks`, `weatherRenderRadiusBlocks`, `weatherFrustumMinDotPercent`
+- Block entities: `enableBlockEntityHooks`, `enableBlockEntityDistanceCulling`
+
+Optional features use conservative settings and remain disabled by default unless explicitly enabled.
+
+## Known limits
 - This is not full upstream Argentum parity.
-- Lighting/AO and model support are conservative Forge 1.8.9 approximations.
-- Model path still uses conservative per-face light/AO approximation and does not fully reproduce vanilla block-model AO weighting.
-- Block-entity optimization remains blocked/fallback-only in this pass because Forge 1.8.9 does not expose a safe generic TESR pre-render hook for conservative distance culling without replacing renderers.
-- Optional cloud rendering intentionally uses a conservative flat cloud layer and only activates when vanilla clouds are disabled and no custom sky renderer is present to avoid double-rendering/conflicts.
-- Optional post-processing uses a capability-gated framebuffer composite pass and disables itself automatically on allocation/composite failures.
-- Feature status (requested areas):
-  - Entity rendering optimization: **Partial** (living-entity distance culling with conservative compatibility guards and vanilla fallback default)
-  - Item and particle optimization: **Partial** (dropped-item distance culling + particle throttle; vanilla fallback default)
-  - Block-entity optimization: **Blocked / fallback-only** (no safe Forge 1.8.9 TESR hook found; vanilla TESR path preserved)
-  - Cloud rendering: **Partial** (opt-in conservative cloud layer; vanilla clouds remain default fallback)
-- Build/runtime verification in this execution environment may be blocked when ForgeGradle cannot resolve `files.minecraftforge.net`.
-- Fluids and translucent ordering are chunk-level approximations and require runtime visual verification.
-- The experimental renderer is disabled by default unless explicitly enabled for runtime validation.
-
-This repository is intended as a private development workspace for a Forge 1.8.9 rendering port, not a public distribution.
+- Lighting, ambient occlusion, fluid geometry, and translucent ordering are conservative Forge 1.8.9 approximations.
+- Model access or decoding failures use conservative fallback geometry.
+- Item optimization is partial; block-entity optimization remains fallback-only.
+- Weather rendering approximates vanilla rain/snow visuals and is not full visual parity.
+- The cloud renderer uses a conservative flat cloud layer and avoids running alongside vanilla clouds or a custom sky renderer.
+- Post-processing is a framebuffer composite/tint pass, not a modern shader chain.
+- FeatherOpt compatibility is guarded defensively, but the white-screen issue remains unverified without real-client testing.
+- Build, visual parity, compatibility, and performance require validation in a Java 8 / Forge 1.8.9 environment with a real client.

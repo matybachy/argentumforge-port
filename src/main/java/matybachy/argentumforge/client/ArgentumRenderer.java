@@ -37,9 +37,9 @@ public class ArgentumRenderer {
         try {
             optionalHooks.onBeforeTerrainRender();
 
-            // Evaluate support once. Calling isSupported() again after begin() can
-            // observe a failure-disabled pipeline and skip end(), leaving a custom
-            // framebuffer bound for FeatherOpt/vanilla rendering.
+            // Evaluate support before beginning the effect. Do not recheck support
+            // during cleanup: a failure may disable the pipeline, but cleanup
+            // must still be attempted in case framebuffer state needs restoration.
             if (effectPipeline.isSupported()) {
                 effectPipeline.begin();
                 effectStarted = true;
@@ -60,14 +60,12 @@ public class ArgentumRenderer {
                 meshManager.render();
             }
         } finally {
-            // Always return to the main framebuffer before restoring GL state,
-            // including when a renderer or compatibility hook throws.
+            // Restore the main framebuffer before restoring the outer GL state.
             if (effectStarted) {
                 try {
                     effectPipeline.end();
                 } catch (Throwable ignored) {
-                    // The effect pipeline is optional; vanilla rendering remains
-                    // the fallback when a third-party renderer rejects the effect.
+                    // Optional effects must never prevent vanilla rendering or cleanup.
                 }
             }
             try {
