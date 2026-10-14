@@ -20,7 +20,8 @@ public final class GLState {
     }
 
     public static void pushRenderState() {
-        GL11.glPushAttrib(GL11.GL_ENABLE_BIT | GL11.GL_COLOR_BUFFER_BIT | GL11.GL_DEPTH_BUFFER_BIT);
+        GL11.glPushAttrib(GL11.GL_ENABLE_BIT | GL11.GL_COLOR_BUFFER_BIT | GL11.GL_DEPTH_BUFFER_BIT
+                | GL11.GL_TEXTURE_BIT | GL11.GL_CURRENT_BIT);
     }
 
     public static void popRenderState() {
