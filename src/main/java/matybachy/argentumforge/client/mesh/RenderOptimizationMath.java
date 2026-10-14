@@ -19,6 +19,25 @@ public final class RenderOptimizationMath {
         return Math.max(clampedCurrent, clampedMinimum);
     }
 
+    public static boolean shouldSkipEntityDistanceCulling(boolean isViewEntity, boolean hasCustomName, boolean isMounted, boolean isRiding, boolean usesVanillaRenderer) {
+        return isViewEntity || hasCustomName || isMounted || isRiding || !usesVanillaRenderer;
+    }
+
+    public static double cappedItemRenderDistanceWeight(double originalWeight, double minimumWeight) {
+        return Math.max(0.01D, Math.min(originalWeight, Math.max(0.01D, minimumWeight)));
+    }
+
+    public static double itemRenderDistanceWeightForDistance(double distanceSq, double cullingDistanceBlocks, double originalWeight) {
+        if (!shouldCullByDistance(distanceSq, cullingDistanceBlocks)) {
+            return originalWeight;
+        }
+        return cappedItemRenderDistanceWeight(originalWeight, 0.10D);
+    }
+
+    public static boolean isBlockEntityOptimizationSupported(boolean hasBlockEntityRenderHook) {
+        return hasBlockEntityRenderHook;
+    }
+
     public static boolean shouldRunCloudFallback(int cloudsSetting, boolean cloudHooksEnabled, boolean cloudRendererEnabled, boolean hasCustomSkyRenderer) {
         return cloudHooksEnabled && cloudRendererEnabled && cloudsSetting == 0 && !hasCustomSkyRenderer;
     }

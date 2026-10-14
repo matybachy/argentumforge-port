@@ -34,7 +34,8 @@ This repository currently includes:
 - prioritized, bounded chunk rebuild scheduling with world/chunk/block invalidation hooks (including MultiPlace updates and edge-neighbor dirtying)
 - conservative chunk visibility culling with radius checks plus directional backface rejection for distant chunks
 - reusable chunk VBO allocation strategy that updates in-place when capacity permits
-- optional living-entity distance culling and particle throttling hooks (both opt-in and disabled by default)
+- optional living-entity distance culling hooks with compatibility guards (opt-in and disabled by default)
+- optional dropped-item distance culling and particle throttling hooks (opt-in and disabled by default)
 - optional conservative cloud layer rendering (opt-in; active only when vanilla clouds are disabled and no custom sky renderer is present)
 - optional capability-gated framebuffer composite effect pipeline with failure self-disable fallback and client-thread gating (no worker-thread GL calls)
 - compatibility interfaces for texture lookup, lighting, GPU buffers, and optional effects
@@ -70,8 +71,9 @@ Runtime validation should be performed in a real 1.8.9 client session:
 ## Current truth-in-advertising status
 - Implemented: baked-model quad meshing path with safe fallback for unsupported/missing model data.
 - Partially implemented: fluid shape/UV parity and smooth-light/AO parity (current implementation is conservative and stable, not 1:1 vanilla; same-material liquid internals are now suppressed, emissive blocks remain full-bright, and AO uses local corner-neighbor sampling).
-- Partially implemented: optional performance hooks (living-entity distance culling + particle throttle + conservative cloud layer + framebuffer composite post pass), with compatibility gates for named/leashed entities and custom sky renderers.
-- Fallback-only in this pass: item rendering optimization, block-entity optimization, and weather replacement rendering; these now explicitly defer to vanilla rendering in all cases.
+- Partially implemented: optional performance hooks (living-entity distance culling + dropped-item distance culling + particle throttle + conservative cloud layer + framebuffer composite post pass).
+- Blocked/fallback-only in this pass: block-entity optimization, because Forge 1.8.9 does not expose a safe generic TESR pre-render hook for conservative opt-in culling without replacing renderer registrations.
+- Fallback-only in this pass: weather replacement rendering to preserve vanilla/custom renderer compatibility on Forge 1.8.9.
 - Unverified in this execution environment: real in-game visual parity/performance due unavailable runtime client validation here.
 - Platform-blocked: direct parity with upstream Argentum/Celeritas renderer abstractions beyond what Forge 1.8.9 exposes.
 
