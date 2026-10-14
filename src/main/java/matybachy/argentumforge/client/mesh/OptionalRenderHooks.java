@@ -4,7 +4,6 @@ import matybachy.argentumforge.ArgentumConfig;
 import matybachy.argentumforge.ArgentumForge;
 import net.minecraft.client.Minecraft;
 import net.minecraft.entity.Entity;
-import net.minecraft.entity.EntityItem;
 import net.minecraft.entity.EntityLiving;
 import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.util.MathHelper;
@@ -12,22 +11,18 @@ import net.minecraftforge.client.event.RenderLivingEvent;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 import org.lwjgl.opengl.GL11;
 
-import java.util.Map;
-import java.util.WeakHashMap;
-
 public final class OptionalRenderHooks {
     private final Minecraft mc = Minecraft.getMinecraft();
     private final WeatherRendererController weatherController = new WeatherRendererController();
-    private final Map<EntityItem, Double> originalItemRenderDistanceWeights = new WeakHashMap<EntityItem, Double>();
     private Integer originalParticleSetting;
-    private boolean blockEntityHookSupportChecked;
-    private boolean blockEntityHookSupported;
 
     public void onBeforeTerrainRender() {
     }
 
     public void onAfterTerrainRender() {
-        if (canUseCloudFallbackRenderer()) renderCloudLayer();
+        if (canUseCloudFallbackRenderer()) {
+            renderCloudLayer();
+        }
     }
 
     public void onClientTick() {
@@ -36,25 +31,16 @@ public final class OptionalRenderHooks {
 
         if (!ArgentumForge.ENABLE_EXPERIMENTAL_CHUNK_RENDERER || !ArgentumConfig.enableParticleHooks) {
             restoreParticleSetting();
-        } else {
-            if (originalParticleSetting == null) originalParticleSetting = Integer.valueOf(mc.gameSettings.particleSetting);
-            mc.gameSettings.particleSetting = RenderOptimizationMath.throttledParticleSetting(
-                    mc.gameSettings.particleSetting, ArgentumConfig.particleThrottleSetting);
+            return;
         }
 
-        if (!ArgentumForge.ENABLE_EXPERIMENTAL_CHUNK_RENDERER
-                || !ArgentumConfig.enableItemHooks
-                || !ArgentumConfig.enableItemDistanceCulling) {
-            restoreItemRenderDistanceWeights();
-        } else {
-            applyItemDistanceCulling();
+        if (originalParticleSetting == null) {
+            originalParticleSetting = Integer.valueOf(mc.gameSettings.particleSetting);
         }
-
-        if (ArgentumForge.ENABLE_EXPERIMENTAL_CHUNK_RENDERER
-                && ArgentumConfig.enableBlockEntityHooks
-                && ArgentumConfig.enableBlockEntityDistanceCulling) {
-            ensureBlockEntityHookSupportChecked();
-        }
+        mc.gameSettings.particleSetting = RenderOptimizationMath.throttledParticleSetting(
+                mc.gameSettings.particleSetting,
+                ArgentumConfig.particleThrottleSetting
+        );
     }
 
     private void restoreParticleSetting() {
@@ -66,9 +52,12 @@ public final class OptionalRenderHooks {
     @SubscribeEvent
     public void onRenderLivingPre(RenderLivingEvent.Pre event) {
         if (event == null || event.entity == null || event.renderer == null) return;
+
         Entity view = mc != null ? mc.getRenderViewEntity() : null;
-        if (!(event.entity instanceof EntityLivingBase) || view == null || event.entity == view) return;
-        if (event.entity.ticksExisted < 1 || event.entity.ridingEntity != null || event.entity.riddenByEntity != null) return;
+        if (!(event.entity instanceof EntityLivingBase) || view == null) return;
+        if (event.entity == view) return;
+        if (event.entity.ticksExisted < 1) return;
+        if (event.entity.ridingEntity != null || event.entity.riddenByEntity != null) return;
 
         boolean hasCustomName = event.entity.hasCustomName();
         boolean isLeashed = event.entity instanceof EntityLiving && ((EntityLiving) event.entity).getLeashed();
@@ -77,98 +66,29 @@ public final class OptionalRenderHooks {
                 ArgentumConfig.enableEntityHooks,
                 ArgentumConfig.enableEntityDistanceCulling,
                 hasCustomName,
-                isLeashed)) return;
+                isLeashed
+        )) return;
 
         if (RenderOptimizationMath.shouldCullByDistance(
-                view.getDistanceSqToEntity(event.entity), ArgentumConfig.entityCullingDistance)) {
+                view.getDistanceSqToEntity(event.entity),
+                ArgentumConfig.entityCullingDistance
+        )) {
             event.setCanceled(true);
         }
     }
 
-    private void applyItemDistanceCulling() {
-        if (mc == null || mc.theWorld == null || mc.getRenderViewEntity() == null) {
-            restoreItemRenderDistanceWeights();
-            return;
-        }
-        Entity view = mc.getRenderViewEntity();
-        for (Object candidate : mc.theWorld.loadedEntityList) {
-            if (!(candidate instanceof EntityItem)) continue;
-            EntityItem item = (EntityItem) candidate;
-            if (item.isDead) continue;
-            if (!originalItemRenderDistanceWeights.containsKey(item)) {
-                originalItemRenderDistanceWeights.put(item, Double.valueOf(item.renderDistanceWeight));
-            }
-            Double original = originalItemRenderDistanceWeights.get(item);
-            if (original != null) {
-                item.renderDistanceWeight = RenderOptimizationMath.itemRenderDistanceWeightForDistance(
-                        view.getDistanceSqToEntity(item), ArgentumConfig.itemCullingDistance, original.doubleValue());
-            }
-        }
-    }
-
-    private void restoreItemRenderDistanceWeights() {
-        for (Map.Entry<EntityItem, Double> entry : originalItemRenderDistanceWeights.entrySet()) {
-            EntityItem item = entry.getKey();
-            if (item != null && !item.isDead && entry.getValue() != null) item.renderDistanceWeight = entry.getValue().doubleValue();
-        }
-        originalItemRenderDistanceWeights.clear();
-    }
-
-    private void ensureBlockEntityHookSupportChecked() {
-        if (blockEntityHookSupportChecked) return;
-        blockEntityHookSupportChecked = true;
-        blockEntityHookSupported = hasClass("net.minecraftforge.client.event.RenderTileEntityEvent$Pre");
-    }
-
-    private boolean hasClass(String className) {
-        try {
-            Class.forName(className);
-            return true;
-        } catch (Throwable ignored) {
-            return false;
-        }
-    }
-
-    public boolean useEntityHooks() {
-        return ArgentumForge.ENABLE_EXPERIMENTAL_CHUNK_RENDERER && ArgentumConfig.enableEntityHooks;
-    }
-
-    public boolean useWeatherHooks() {
-        return ArgentumForge.ENABLE_EXPERIMENTAL_CHUNK_RENDERER && ArgentumConfig.enableWeatherHooks;
-    }
-
-    public boolean useCloudHooks() {
-        return canUseCloudFallbackRenderer();
-    }
-
-    public boolean useItemHooks() {
-        return ArgentumForge.ENABLE_EXPERIMENTAL_CHUNK_RENDERER && ArgentumConfig.enableItemHooks;
-    }
-
-    public boolean useParticleHooks() {
-        return ArgentumForge.ENABLE_EXPERIMENTAL_CHUNK_RENDERER && ArgentumConfig.enableParticleHooks;
-    }
-
-    public boolean useBlockEntityHooks() {
-        ensureBlockEntityHookSupportChecked();
-        return ArgentumForge.ENABLE_EXPERIMENTAL_CHUNK_RENDERER && ArgentumConfig.enableBlockEntityHooks
-                && (!ArgentumConfig.enableBlockEntityDistanceCulling
-                || RenderOptimizationMath.isBlockEntityOptimizationSupported(blockEntityHookSupported));
-    }
-
-    private boolean canUseCloudFallbackRenderer() {
-        if (mc == null || mc.theWorld == null || mc.gameSettings == null) return false;
-        return RenderOptimizationMath.shouldRunCloudFallback(mc.gameSettings.clouds, ArgentumConfig.enableCloudHooks,
-                ArgentumConfig.enableCloudRenderer, hasCustomSkyRenderer());
-    }
-
     private void renderCloudLayer() {
+        if (mc == null || mc.theWorld == null || mc.gameSettings == null) return;
+        if (mc.gameSettings.clouds != 0) return;
         Entity view = mc.getRenderViewEntity();
+        if (view == null) return;
+
         float cloudY = mc.theWorld.provider.getCloudHeight();
         int radius = Math.max(32, ArgentumConfig.cloudRenderRadiusBlocks);
         int step = 32;
         int baseX = MathHelper.floor_double(view.posX / step) * step;
         int baseZ = MathHelper.floor_double(view.posZ / step) * step;
+
         GL11.glPushAttrib(GL11.GL_ENABLE_BIT | GL11.GL_COLOR_BUFFER_BIT);
         try {
             GL11.glDisable(GL11.GL_TEXTURE_2D);
@@ -189,6 +109,42 @@ public final class OptionalRenderHooks {
             GL11.glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
             GL11.glPopAttrib();
         }
+    }
+
+    public boolean useEntityHooks() {
+        return ArgentumForge.ENABLE_EXPERIMENTAL_CHUNK_RENDERER && ArgentumConfig.enableEntityHooks;
+    }
+
+    public boolean useWeatherHooks() {
+        return ArgentumForge.ENABLE_EXPERIMENTAL_CHUNK_RENDERER && ArgentumConfig.enableWeatherHooks;
+    }
+
+    public boolean useCloudHooks() {
+        return canUseCloudFallbackRenderer();
+    }
+
+    public boolean useItemHooks() {
+        // Item rendering remains vanilla fallback-only in this pass.
+        return false;
+    }
+
+    public boolean useParticleHooks() {
+        return ArgentumForge.ENABLE_EXPERIMENTAL_CHUNK_RENDERER && ArgentumConfig.enableParticleHooks;
+    }
+
+    public boolean useBlockEntityHooks() {
+        // TESR/block-entity rendering remains vanilla fallback-only in this pass.
+        return false;
+    }
+
+    private boolean canUseCloudFallbackRenderer() {
+        if (mc == null || mc.theWorld == null || mc.gameSettings == null) return false;
+        return RenderOptimizationMath.shouldRunCloudFallback(
+                mc.gameSettings.clouds,
+                ArgentumConfig.enableCloudHooks,
+                ArgentumConfig.enableCloudRenderer,
+                hasCustomSkyRenderer()
+        );
     }
 
     private boolean hasCustomSkyRenderer() {

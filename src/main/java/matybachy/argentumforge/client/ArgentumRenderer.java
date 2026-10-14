@@ -31,30 +31,45 @@ public class ArgentumRenderer {
         Entity view = mc.getRenderViewEntity();
         if (view == null) return;
 
+        boolean effectStarted = false;
         GL11.glPushAttrib(GL11.GL_ENABLE_BIT | GL11.GL_COLOR_BUFFER_BIT | GL11.GL_DEPTH_BUFFER_BIT);
         GL11.glPushMatrix();
+        try {
+            optionalHooks.onBeforeTerrainRender();
 
-        optionalHooks.onBeforeTerrainRender();
-        if (effectPipeline.isSupported()) effectPipeline.begin();
-        TerrainTextureAtlas.bindTerrainTextureAtlas();
-        GL11.glEnable(GL11.GL_TEXTURE_2D);
-        GL11.glEnable(GL11.GL_BLEND);
-        GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
-        GL11.glDisable(GL11.GL_CULL_FACE);
+            // Capture the decision once. A failed begin() can disable the pipeline,
+            // so rechecking isSupported() here would skip end() and leave its
+            // framebuffer bound during the remainder of the frame.
+            if (effectPipeline.isSupported()) {
+                effectPipeline.begin();
+                effectStarted = true;
+            }
 
-        double px = view.posX;
-        double py = view.posY;
-        double pz = view.posZ;
-        GL11.glTranslated(-px, -py, -pz);
+            TerrainTextureAtlas.bindTerrainTextureAtlas();
+            GL11.glEnable(GL11.GL_TEXTURE_2D);
+            GL11.glEnable(GL11.GL_BLEND);
+            GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
+            GL11.glDisable(GL11.GL_CULL_FACE);
+            GL11.glTranslated(-view.posX, -view.posY, -view.posZ);
 
-        if (meshManager != null) {
-            meshManager.render();
+            if (meshManager != null) {
+                meshManager.render();
+            }
+        } finally {
+            if (effectStarted) {
+                try {
+                    effectPipeline.end();
+                } catch (Throwable ignored) {
+                    // Optional effects must never prevent vanilla cleanup.
+                }
+            }
+            try {
+                optionalHooks.onAfterTerrainRender();
+            } finally {
+                GL11.glPopMatrix();
+                GL11.glPopAttrib();
+            }
         }
-
-        if (effectPipeline.isSupported()) effectPipeline.end();
-        optionalHooks.onAfterTerrainRender();
-        GL11.glPopMatrix();
-        GL11.glPopAttrib();
     }
 
     public void onClientTick() {
