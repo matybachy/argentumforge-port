@@ -80,8 +80,13 @@ public final class OptimizedWeatherRenderer extends IRenderHandler {
             GL11.glDepthMask(false);
 
             columns.refresh(world, minX, minZ, maxX, maxZ, cameraX, cameraZ, radiusCeil + 1);
-            drawPass(mc, world, partialTicks, cameraX, cameraY, cameraZ, weatherStrength, sideX, sideZ, lookX, lookZ, maxDistanceSq, minForwardDot, minY, maxY, minX, maxX, minZ, maxZ, false);
-            drawPass(mc, world, partialTicks, cameraX, cameraY, cameraZ, weatherStrength, sideX, sideZ, lookX, lookZ, maxDistanceSq, minForwardDot, minY, maxY, minX, maxX, minZ, maxZ, true);
+            // Skip a whole pass (grid walk, texture bind, glBegin/glEnd) when no column needs it.
+            if (columns.hasRain()) {
+                drawPass(mc, world, partialTicks, cameraX, cameraY, cameraZ, weatherStrength, sideX, sideZ, lookX, lookZ, maxDistanceSq, minForwardDot, minY, maxY, minX, maxX, minZ, maxZ, false);
+            }
+            if (columns.hasSnow()) {
+                drawPass(mc, world, partialTicks, cameraX, cameraY, cameraZ, weatherStrength, sideX, sideZ, lookX, lookZ, maxDistanceSq, minForwardDot, minY, maxY, minX, maxX, minZ, maxZ, true);
+            }
 
             GL11.glDepthMask(true);
             GL11.glColor4f(1.0F, 1.0F, 1.0F, 1.0F);
@@ -195,6 +200,8 @@ public final class OptimizedWeatherRenderer extends IRenderHandler {
         private int depth;
         private byte[] types = new byte[0];
         private int[] heights = new int[0];
+        private int rainColumns;
+        private int snowColumns;
 
         void refresh(WorldClient world, int minX, int minZ, int maxX, int maxZ, double cameraX, double cameraZ, int radius) {
             int newWidth = maxX - minX + 1;
@@ -210,6 +217,8 @@ public final class OptimizedWeatherRenderer extends IRenderHandler {
                 heights = new int[size];
             }
             double radiusSq = (double) radius * radius;
+            rainColumns = 0;
+            snowColumns = 0;
             for (int z = 0; z < newDepth; z++) {
                 for (int x = 0; x < newWidth; x++) {
                     int index = z * newWidth + x;
@@ -227,6 +236,8 @@ public final class OptimizedWeatherRenderer extends IRenderHandler {
                         }
                     }
                     types[index] = type;
+                    if (type == RAIN) rainColumns++;
+                    else if (type == SNOW) snowColumns++;
                     heights[index] = type == NONE ? 0 : world.getPrecipitationHeight(column).getY();
                 }
             }
@@ -236,6 +247,14 @@ public final class OptimizedWeatherRenderer extends IRenderHandler {
             this.minZ = minZ;
             width = newWidth;
             depth = newDepth;
+        }
+
+        boolean hasRain() {
+            return rainColumns > 0;
+        }
+
+        boolean hasSnow() {
+            return snowColumns > 0;
         }
 
         int type(int x, int z) {
