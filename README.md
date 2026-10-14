@@ -16,9 +16,9 @@ Experimental Forge 1.8.9 port of Argentum rendering ideas, built as a separate m
 - Optional living-entity distance culling with compatibility guards (cached class-eligibility checks)
 - Optional dropped-item distance adjustment and particle-setting throttling with restoration behavior
 - Optional cloud layer renderer, active only when vanilla clouds are off and there is no custom sky renderer
-- Optional weather approximation with per-tick cached biome/precipitation columns, distance and forward filtering, and provider fallback
+- Optional weather approximation with per-tick cached biome/precipitation columns (rain or snow pass skipped when no column needs it), distance and forward filtering, and provider fallback
 - Optional framebuffer composite/tint pass, applied only to the legacy overlay pass
-- FeatherOpt and OptiFine detected at runtime without class linkage; no FeatherOpt source is vendored or modified
+- FeatherOpt and OptiFine detected at runtime without class linkage (memoized); no FeatherOpt source is vendored or modified
 
 ## Repository status
 This is an experimental port. It does not reach full upstream Argentum/Celeritas parity. Upstream repositories are used only as read-only references. See `PORTING_STATUS.md` for the feature matrix and `TECHNICAL_NOTES.md` for lifecycle details.

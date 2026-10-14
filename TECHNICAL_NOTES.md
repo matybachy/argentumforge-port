@@ -76,7 +76,7 @@ About 50 KB per snapshot. Pending snapshots are limited by `terrainMaxPendingSna
 - **Living entities:** `RenderLivingEvent.Pre` distance culling, limited to vanilla entity and renderer packages. Unnamed, unmounted and unleashed only. The package checks are cached in `IdentityHashMap`s.
 - **Items:** `EntityItem.renderDistanceWeight` adjustment, restored on world change or disable.
 - **Particles:** the particle-setting floor is restored when disabled.
-- **Weather:** `WorldProvider.setWeatherRenderer` is used only when the provider has none. `WeatherColumnCache` keeps type and precipitation height per column for one world tick and camera window. The world is held weakly.
+- **Weather:** `WorldProvider.setWeatherRenderer` is used only when the provider has none. `WeatherColumnCache` keeps type and precipitation height per column for one world tick and camera window. The world is held weakly. The cache counts rain and snow columns, and a pass with none is skipped.
 - **Clouds:** flat grid from `RenderWorldLastEvent`, only when vanilla clouds are off and there is no sky renderer.
 
 ## Removed code
@@ -86,6 +86,7 @@ About 50 KB per snapshot. Pending snapshots are limited by `terrainMaxPendingSna
 ## Compatibility
 
 - **FeatherOpt:** static mixin-target review in `PORTING_STATUS.md`. No conflicting registered target was found for the replaced objects.
+- Detection results are memoized in `CompatibilityEnvironment`, because class presence is fixed for the session.
 - **OptiFine:** integrated terrain is not installed when `optifine.OptiFineForgeTweaker` or `optifine.Config` is present.
 
 ## Validation record
