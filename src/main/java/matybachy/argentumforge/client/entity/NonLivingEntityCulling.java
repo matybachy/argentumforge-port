@@ -52,6 +52,7 @@ public final class NonLivingEntityCulling {
     private static final List<Class<?>> wrappedKeys = new ArrayList<Class<?>>();
     private static Field renderMapField;
     private static boolean failed;
+    private static boolean installAttempted;
     private static volatile boolean active;
     private static volatile double maxDistanceSq;
 
@@ -69,9 +70,14 @@ public final class NonLivingEntityCulling {
         double distance = ArgentumConfig.nonLivingEntityCullingDistance;
         maxDistanceSq = distance * distance;
         boolean requested = isRequested() && !failed;
-        if (requested && wrappedKeys.isEmpty()) install();
-        else if (!requested && !wrappedKeys.isEmpty()) uninstall();
-        active = requested && !wrappedKeys.isEmpty();
+        if (requested && !installAttempted) {
+            installAttempted = true;
+            install();
+        } else if (!requested && installAttempted) {
+            uninstall();
+            installAttempted = false;
+        }
+        active = requested && !failed && !wrappedKeys.isEmpty();
     }
 
     static boolean shouldSkip(Entity entity, double camX, double camY, double camZ) {
@@ -98,8 +104,9 @@ public final class NonLivingEntityCulling {
     private static void install() {
         RenderManager manager = Minecraft.getMinecraft().getRenderManager();
         if (manager == null) return;
+        Map<Class<?>, Render<?>> map = null;
         try {
-            Map<Class<?>, Render<?>> map = renderMap(manager);
+            map = renderMap(manager);
             for (Object[] target : TARGETS) {
                 Class<?> key = (Class<?>) target[0];
                 Render<?> current = map.get(key);
@@ -108,9 +115,11 @@ public final class NonLivingEntityCulling {
                 map.put(key, new DistanceCulledEntityRenderer(manager, (Render<Entity>) current));
                 wrappedKeys.add(key);
             }
-        } catch (RuntimeException e) {
-            fail(e);
-        } catch (IllegalAccessException e) {
+            if (!wrappedKeys.isEmpty()) LOGGER.info("Non-living entity culling wrapped {} vanilla renderers", wrappedKeys.size());
+        } catch (Exception e) {
+            // Roll back immediately so no partially wrapped map survives the failure.
+            if (map != null) restoreWrappers(map);
+            wrappedKeys.clear();
             fail(e);
         }
     }
@@ -118,22 +127,26 @@ public final class NonLivingEntityCulling {
     private static void uninstall() {
         RenderManager manager = Minecraft.getMinecraft().getRenderManager();
         try {
-            if (manager != null) {
-                Map<Class<?>, Render<?>> map = renderMap(manager);
-                for (Class<?> key : wrappedKeys) {
-                    Render<?> current = map.get(key);
-                    if (current instanceof DistanceCulledEntityRenderer) {
-                        map.put(key, ((DistanceCulledEntityRenderer) current).getDelegate());
-                    }
-                }
-            }
-        } catch (RuntimeException e) {
-            fail(e);
-        } catch (IllegalAccessException e) {
+            if (manager != null) restoreWrappers(renderMap(manager));
+        } catch (Exception e) {
             fail(e);
         } finally {
             wrappedKeys.clear();
             active = false;
+        }
+    }
+
+    /**
+     * Replaces every value that is one of our wrappers with its original renderer. This also covers
+     * subclass keys that RenderManager.getEntityClassRenderObject cached with the wrapper as value.
+     * Values installed by other mods are never touched.
+     */
+    private static void restoreWrappers(Map<Class<?>, Render<?>> map) {
+        for (Map.Entry<Class<?>, Render<?>> entry : map.entrySet()) {
+            Render<?> value = entry.getValue();
+            if (value instanceof DistanceCulledEntityRenderer) {
+                entry.setValue(((DistanceCulledEntityRenderer) value).getDelegate());
+            }
         }
     }
 
