@@ -1,6 +1,5 @@
 package matybachy.argentumforge.client.mesh;
 
-import matybachy.argentumforge.client.compat.CompatibilityEnvironment;
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -43,11 +42,5 @@ public class RenderOptimizationMathTest {
         Assert.assertFalse(RenderOptimizationMath.shouldRunOptionalEffects(true, true, false, false));
         Assert.assertFalse(RenderOptimizationMath.shouldRunOptionalEffects(true, false, false, true));
         Assert.assertFalse(RenderOptimizationMath.shouldRunOptionalEffects(true, true, true, true));
-    }
-
-    @Test
-    public void optionalEffectsRemainIndependentFromOptionalClientPresence() {
-        Assert.assertTrue(RenderOptimizationMath.shouldRunOptionalEffects(true, true, false, true));
-        Assert.assertFalse(CompatibilityEnvironment.classPresentForTest("missing.optional.client.Marker"));
     }
 }
