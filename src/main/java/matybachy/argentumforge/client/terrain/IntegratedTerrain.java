@@ -67,6 +67,11 @@ public final class IntegratedTerrain {
         return installed && ArgentumConfig.enableTerrainBoundsCulling;
     }
 
+    /** Client world unload: release every pending snapshot (they pin chunks of the old world). */
+    public static void onClientWorldUnload() {
+        SnapshotCompileSupport.discardAll();
+    }
+
     /** RenderTickEvent START: resets the per-frame snapshot capture budget. */
     public static void onRenderFrameStart() {
         capturesThisFrame = 0;
@@ -131,6 +136,7 @@ public final class IntegratedTerrain {
         containerField.set(renderGlobal, container);
         factoryField.set(renderGlobal, factory);
         renderGlobal.loadRenderers();
+        SnapshotCompileSupport.discardAll();
         TerrainStats.reset();
         LOGGER.info("Vanilla chunk renderer objects restored");
     }

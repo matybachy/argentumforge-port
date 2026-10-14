@@ -9,6 +9,7 @@ import matybachy.argentumforge.client.terrain.IntegratedTerrain;
 import net.minecraft.client.Minecraft;
 import net.minecraftforge.client.event.RenderGameOverlayEvent;
 import net.minecraftforge.common.MinecraftForge;
+import net.minecraftforge.event.world.WorldEvent;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 import net.minecraftforge.fml.common.gameevent.TickEvent;
 import net.minecraftforge.fml.relauncher.Side;
@@ -55,6 +56,13 @@ public class ClientProxy extends CommonProxy {
         }
         IntegratedTerrain.onClientTick(Minecraft.getMinecraft());
         BlockEntityDistanceCulling.onClientTick();
+    }
+
+    @SubscribeEvent
+    public void onWorldUnload(WorldEvent.Unload event) {
+        // RenderGlobal.setWorldAndLoadRenderers(null) keeps the old ViewFrustum, so pending
+        // snapshots would otherwise keep the unloaded world's chunks reachable.
+        if (event.world != null && event.world.isRemote) IntegratedTerrain.onClientWorldUnload();
     }
 
     @SubscribeEvent

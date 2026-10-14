@@ -34,10 +34,6 @@ public final class RenderOptimizationMath {
         return cappedItemRenderDistanceWeight(originalWeight, 0.10D);
     }
 
-    public static boolean isBlockEntityOptimizationSupported(boolean hasBlockEntityRenderHook) {
-        return hasBlockEntityRenderHook;
-    }
-
     public static boolean shouldRunCloudFallback(int cloudsSetting, boolean cloudHooksEnabled, boolean cloudRendererEnabled, boolean hasCustomSkyRenderer) {
         return cloudHooksEnabled && cloudRendererEnabled && cloudsSetting == 0 && !hasCustomSkyRenderer;
     }

@@ -1,6 +1,7 @@
 package matybachy.argentumforge.client.terrain;
 
 import net.minecraft.client.renderer.chunk.RenderChunk;
+import net.minecraft.util.EnumWorldBlockLayer;
 import org.lwjgl.BufferUtils;
 import org.lwjgl.opengl.GL11;
 
@@ -9,7 +10,8 @@ import java.nio.FloatBuffer;
 /**
  * Second-stage section culling. Vanilla's setupTerrain already tests each full 16x16x16 section box
  * against the frustum and walks the cave-culling visibility graph. This filter additionally tests the
- * tighter box of blocks that the compiled section actually renders (plus a one-block margin for
+ * tighter box of blocks that can render in the requested layer of the installed compile result
+ * (captured with Forge's {@code Block.canRenderInLayer}, plus a one-block margin for
  * models that extend outside their block) against the left/right/top/bottom camera planes.
  *
  * <p>The planes are derived exactly like ClippingHelperImpl from the GL projection and modelview
@@ -71,10 +73,10 @@ final class TerrainVisibilityFilter {
         return true;
     }
 
-    boolean shouldDraw(RenderChunk renderChunk) {
-        if (!valid || !(renderChunk instanceof SnapshotRenderChunk)) return true;
+    boolean shouldDraw(RenderChunk renderChunk, EnumWorldBlockLayer layer) {
+        if (!valid || layer == null || !(renderChunk instanceof SnapshotRenderChunk)) return true;
         GeometryBounds bounds = ((SnapshotRenderChunk) renderChunk).getSnapshotSupport()
-                .boundsFor(renderChunk.getCompiledChunk());
+                .boundsFor(renderChunk.getCompiledChunk(), layer);
         if (bounds == null) return true;
 
         double minX = bounds.minX - MARGIN - cameraX;

@@ -33,23 +33,23 @@ Finally it calls `RenderGlobal.loadRenderers()`, which builds a new `ViewFrustum
    - the `ChunkCache` "levels empty" flag
    - the inclusive bounds of blocks with `getRenderType() != -1`
 
-   The snapshot is stored in an `AtomicReference` together with the task object.
-2. Worker thread: `ChunkRenderWorker` calls `rebuildChunk(x, y, z, task)`. The override records the task in a thread-local and calls vanilla/Forge `rebuildChunk`. That calls Forge's `createRegionRenderCache(world, from, to, 1)`. The override CAS-takes the pending snapshot only if it belongs to the same task and `from` equals `origin - 1`, and returns `SnapshotRegionRenderCache`. Otherwise it returns vanilla's cache.
+   Sections whose chunk is not loaded get no snapshot. Empty-level sections store no arrays. The `SnapshotRegionRenderCache` for `(origin - 1, origin + 16, 1)` is constructed right away on the client thread, so the `ChunkCache` constructor's live reads stay off the workers. Snapshot and cache are stored in an `AtomicReference` together with the task object.
+2. Worker thread: `ChunkRenderWorker` calls `rebuildChunk(x, y, z, task)`. The override records the task in a thread-local and calls vanilla/Forge `rebuildChunk`. That calls Forge's `createRegionRenderCache(world, from, to, 1)`. The override CAS-takes the pending entry only if it belongs to the same task and world, `from`, `to` and `subtract` match, and returns the prebuilt `SnapshotRegionRenderCache`. Otherwise it returns vanilla's cache.
 3. `SnapshotRegionRenderCache` answers in-region requests from the snapshot:
    - `getBlockState`, `getTileEntity`, `getLightFor`, `getBiomeGenForCoords`
    - `getCombinedLight`, a port of `ChunkCache.getLightForExt` including `getUseNeighborBrightness` and no-sky handling
    - `extendedLevelsInChunkCache`
 
    `isAirBlock`, `getStrongPower` and Forge `isSideSolid` reach the snapshot through the overridden `getBlockState`.
-4. Vanilla code does the rest: meshing, `canRenderInLayer` layering, tile-entity bookkeeping, `VisGraph`, translucent `sortVertexData`, `ChunkRenderWorker` status checks (stale results are dropped), and client-thread upload. After a snapshot build the compiled chunk's geometry bounds go into a synchronized `WeakHashMap<CompiledChunk, GeometryBounds>`.
-5. A pending snapshot is released when the next task replaces it, on `stopCompileTask` (position change), on `deleteGlResources`, or when `rebuildChunk` exits without using it.
+4. Vanilla code does the rest: meshing, `canRenderInLayer` layering, tile-entity bookkeeping, `VisGraph`, translucent `sortVertexData`, `ChunkRenderWorker` status checks (stale results are dropped), and client-thread upload. After a snapshot build the per-layer bounds go into a synchronized `WeakHashMap<CompiledChunk, GeometryBounds[]>`; the `setCompiledChunk` override moves them to a volatile field when vanilla installs that result, so the per-frame lookup takes no lock.
+5. A pending snapshot is released when the next task replaces it, on `stopCompileTask` (position change), on `deleteGlResources`, when `rebuildChunk` exits without using it, when vanilla objects are restored, and on client `WorldEvent.Unload` (`SnapshotCompileSupport.discardAll`; `setWorldAndLoadRenderers(null)` does not delete the old `ViewFrustum`).
 
 ### Drawing and visibility
 
 `RenderGlobal.renderBlockLayer` still filters empty layers and calls `renderContainer.addRenderChunk`/`renderChunkLayer`. The Argentum containers inherit vanilla drawing and override:
 
 - `initialize`: captures planes
-- `addRenderChunk`: drops a layer only when the compiled chunk's recorded bounds (expanded by 1 block) are behind one of the four side planes
+- `addRenderChunk`: drops a layer only when the recorded bounds for that layer (expanded by 1 block) are behind one of the four side planes
 
 The planes are computed from `GL_PROJECTION_MATRIX`/`GL_MODELVIEW_MATRIX` the same way `ClippingHelperImpl.init` does. Near and far planes are ignored, because the sky pass changes only the far distance between frustum creation and `setupTerrain`. Missing bounds, an invalid plane or a non-Argentum chunk all mean the layer is drawn.
 
@@ -69,7 +69,7 @@ About 50 KB per snapshot. Pending snapshots are limited by `terrainMaxPendingSna
 
 ## Other hooks
 
-- **Block entities:** `BlockEntityDistanceCulling` replaces the exact vanilla renderer instances for chests, ender chests, signs, skulls and banners in `TileEntityRendererDispatcher.mapSpecialRenderers` (`field_147559_m`) with `DistanceCulledTileEntityRenderer`.
+- **Block entities:** `BlockEntityDistanceCulling` replaces the exact vanilla renderer instances for chests, ender chests, signs, skulls, banners, mob spawners and enchantment tables in `TileEntityRendererDispatcher.mapSpecialRenderers` (`field_147559_m`) with `DistanceCulledTileEntityRenderer`.
   - The wrapper delegates `renderTileEntityAt`, Forge `renderTileEntityFast`, `setRendererDispatcher` and `forceTileEntityRender`.
   - It skips only when the block entity's exact class is in the set, it is in the client world, `destroyStage < 0`, and its distance to `TileEntityRendererDispatcher.staticPlayerX/Y/Z` exceeds the limit.
   - Entries cached for subclasses by `getSpecialRendererByClass` still pass through, because of the exact-class check.
@@ -78,6 +78,10 @@ About 50 KB per snapshot. Pending snapshots are limited by `terrainMaxPendingSna
 - **Particles:** the particle-setting floor is restored when disabled.
 - **Weather:** `WorldProvider.setWeatherRenderer` is used only when the provider has none. `WeatherColumnCache` keeps type and precipitation height per column for one world tick and camera window. The world is held weakly.
 - **Clouds:** flat grid from `RenderWorldLastEvent`, only when vanilla clouds are off and there is no sky renderer.
+
+## Removed code
+
+`TerrainTracker`, `WaterMesher`, `RenderLayer`, `NoOpEffectPipeline` and `RenderOptimizationMath.isBlockEntityOptimizationSupported` had no references in source, tests or configuration, so they were removed.
 
 ## Compatibility
 

@@ -6,12 +6,13 @@ Experimental Forge 1.8.9 port of Argentum rendering ideas, built as a separate m
 - Forge 1.8.9 / Java 8 / LWJGL 2 target, independent mod ID `argentumforge`
 - Everything is opt-in behind `enableExperimentalRenderer` (default `false`); with it off the vanilla renderer runs unchanged
 - `terrainMode=integrated` (default when the master switch is on): ArgentumForge's section compiler is installed inside `RenderGlobal`'s own chunk lifecycle. It replaces the `RenderGlobal` chunk factory and render container, so vanilla's worker threads compile every terrain section through ArgentumForge `RenderChunk` subclasses, and vanilla's own solid/cutout-mipped/cutout/translucent passes draw them. There is no overlay and nothing is drawn twice
-  - Each compile task gets an immutable 20x20x20 snapshot of block states, raw light, biomes and tile-entity references, captured on the client thread. Worker-side block rendering reads the snapshot through Forge's `RenderChunk.createRegionRenderCache` hook instead of live chunks. Vanilla/Forge block, fluid, model, AO/lightmap, tint, layer and translucency-sort code still does the meshing
+  - Each compile task gets an immutable 20x20x20 snapshot (empty sections store nothing; only already-loaded chunks are read) of block states, raw light, biomes and tile-entity references, captured on the client thread. Worker-side block rendering reads the snapshot through Forge's `RenderChunk.createRegionRenderCache` hook instead of live chunks. Vanilla/Forge block, fluid, model, AO/lightmap, tint, layer and translucency-sort code still does the meshing
   - Per-frame capture budget, a cap on pending snapshots, per-task pairing, and discard on position change or GL deletion. If the budget runs out or a capture fails, that section is compiled from the vanilla region cache
-  - Second-stage culling of section layers by their rendered-block bounds (one-block margin) against the camera side planes
+  - The snapshot-backed `RegionRenderCache` is also constructed on the client thread, so its superclass constructor never reads the live world on a worker
+  - Second-stage culling of each section layer by the bounds of blocks that can render in that layer (one-block margin) against the camera side planes; lock-free per-frame lookup
   - Disabled automatically when OptiFine is detected, and optionally when FeatherOpt is present
 - `terrainMode=overlay`: legacy late `RenderWorldLastEvent` overlay (can duplicate vanilla terrain; kept for comparison only). Its meshers now use primitive float buffers
-- Optional distance culling for the vanilla chest, ender chest, sign, skull and banner renderers
+- Optional distance culling for the vanilla chest, ender chest, sign, skull, banner, mob spawner and enchantment table renderers
 - Optional living-entity distance culling with compatibility guards (cached class-eligibility checks)
 - Optional dropped-item distance adjustment and particle-setting throttling with restoration behavior
 - Optional cloud layer renderer, active only when vanilla clouds are off and there is no custom sky renderer
@@ -55,6 +56,6 @@ With `enableExperimentalRenderer=true`, the F3 screen shows integrated-terrain c
 - No performance improvement has been measured. Snapshot capture moves block, light and biome reads from worker threads to the client thread, bounded by `terrainSnapshotsPerFrame`. Whether this helps frame time is unknown.
 - Integrated mode keeps vanilla section visibility (the frustum and cave-culling graph in `setupTerrain`). There is no GPU occlusion culling and no custom visibility graph.
 - Tile-entity objects referenced by a snapshot are live objects. Block models that read them on a worker thread have the same thread-safety as vanilla.
-- Particle, font, name-tag, GUI/HUD, item-model and enchantment-glint optimization is not implemented.
+- Particle, font, name-tag, GUI/HUD, item-model and enchantment-glint optimization is not implemented; `PORTING_STATUS.md` records the specific technical reasons.
 - Weather and clouds are approximations, not vanilla-equivalent renderers.
 - FeatherOpt and OptiFine runtime compatibility is unverified.

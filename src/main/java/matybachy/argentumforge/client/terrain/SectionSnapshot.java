@@ -4,11 +4,15 @@ import net.minecraft.block.Block;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.init.Blocks;
 import net.minecraft.tileentity.TileEntity;
+import net.minecraft.util.EnumWorldBlockLayer;
 import net.minecraft.util.BlockPos;
 import net.minecraft.world.EnumSkyBlock;
 import net.minecraft.world.World;
+import net.minecraft.world.WorldType;
 import net.minecraft.world.biome.BiomeGenBase;
 import net.minecraft.world.chunk.Chunk;
+import net.minecraft.world.chunk.IChunkProvider;
+import net.minecraft.world.chunk.storage.ExtendedBlockStorage;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -18,8 +22,11 @@ import java.util.Map;
  * raw sky/block light, biomes and tile-entity references for a 20x20x20 region (two blocks of
  * padding, the same footprint vanilla's {@code RegionRenderCache} covers). The arrays are filled
  * once during {@link #capture} and never mutated, so worker threads can read them without touching
- * live {@link Chunk} storage. Tile-entity objects themselves are shared references, exactly as in
- * vanilla's worker-side chunk compilation.
+ * live {@link Chunk} storage. Only chunks the client provider already has loaded are read; missing
+ * chunks are recorded as air with default light, as Forge's ChunkCache does for a null chunk.
+ * Tile-entity objects are shared live references (vanilla's worker compilation shares them too);
+ * they are not made immutable by being stored here. Sections whose chunk levels are empty store no
+ * arrays at all, because vanilla's rebuildChunk does not query blocks for them.
  */
 final class SectionSnapshot {
     static final int PADDING = 2;
@@ -32,7 +39,8 @@ final class SectionSnapshot {
     final int originZ;
     final boolean hasNoSky;
     final boolean levelsEmpty;
-    final GeometryBounds bounds;
+    /** Per {@link EnumWorldBlockLayer#ordinal()} bounds of blocks that can render in that layer, or null. */
+    final GeometryBounds[] layerBounds;
     private final int minX;
     private final int minY;
     private final int minZ;
@@ -43,7 +51,7 @@ final class SectionSnapshot {
     private final Map<BlockPos, TileEntity> tileEntities;
 
     private SectionSnapshot(World world, int originX, int originY, int originZ, boolean hasNoSky, boolean levelsEmpty,
-                            GeometryBounds bounds, IBlockState[] states, byte[] skyLight, byte[] blockLight,
+                            GeometryBounds[] layerBounds, IBlockState[] states, byte[] skyLight, byte[] blockLight,
                             BiomeGenBase[] biomes, Map<BlockPos, TileEntity> tileEntities) {
         this.world = world;
         this.originX = originX;
@@ -51,7 +59,7 @@ final class SectionSnapshot {
         this.originZ = originZ;
         this.hasNoSky = hasNoSky;
         this.levelsEmpty = levelsEmpty;
-        this.bounds = bounds;
+        this.layerBounds = layerBounds;
         this.minX = originX - PADDING;
         this.minY = originY - PADDING;
         this.minZ = originZ - PADDING;
@@ -62,7 +70,10 @@ final class SectionSnapshot {
         this.tileEntities = tileEntities;
     }
 
-    /** Must be called on the client thread; it reads live chunk storage. */
+    /**
+     * Must be called on the client thread; it reads live chunk storage. Returns null when the
+     * section's own chunk is not loaded, so the caller leaves that section on the vanilla path.
+     */
     static SectionSnapshot capture(World world, BlockPos origin) {
         final int originX = origin.getX();
         final int originY = origin.getY();
@@ -78,10 +89,13 @@ final class SectionSnapshot {
         final int chunkMaxX = maxX >> 4;
         final int chunkMaxZ = maxZ >> 4;
 
+        IChunkProvider provider = world.getChunkProvider();
+        if (provider == null || !provider.chunkExists(originX >> 4, originZ >> 4)) return null;
         Chunk[][] chunks = new Chunk[chunkMaxX - chunkMinX + 1][chunkMaxZ - chunkMinZ + 1];
         for (int cx = chunkMinX; cx <= chunkMaxX; cx++) {
             for (int cz = chunkMinZ; cz <= chunkMaxZ; cz++) {
-                chunks[cx - chunkMinX][cz - chunkMinZ] = world.getChunkFromChunkCoords(cx, cz);
+                // chunkExists avoids handing back the provider's shared blank chunk for unloaded columns.
+                chunks[cx - chunkMinX][cz - chunkMinZ] = provider.chunkExists(cx, cz) ? world.getChunkFromChunkCoords(cx, cz) : null;
             }
         }
 
@@ -96,18 +110,22 @@ final class SectionSnapshot {
             }
         }
 
+        boolean hasNoSky = world.provider.getHasNoSky();
+        if (levelsEmpty) {
+            return new SectionSnapshot(world, originX, originY, originZ, hasNoSky, true,
+                    new GeometryBounds[EnumWorldBlockLayer.values().length], null, null, null, null,
+                    new HashMap<BlockPos, TileEntity>());
+        }
+
+        boolean debugWorld = world.getWorldType() == WorldType.DEBUG_WORLD;
+        EnumWorldBlockLayer[] layers = EnumWorldBlockLayer.values();
+        int[][] layerBox = new int[layers.length][];
         IBlockState air = Blocks.air.getDefaultState();
         IBlockState[] states = new IBlockState[VOLUME];
         byte[] sky = new byte[VOLUME];
         byte[] block = new byte[VOLUME];
         Map<BlockPos, TileEntity> tiles = new HashMap<BlockPos, TileEntity>();
         BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
-        int gMinX = Integer.MAX_VALUE;
-        int gMinY = Integer.MAX_VALUE;
-        int gMinZ = Integer.MAX_VALUE;
-        int gMaxX = Integer.MIN_VALUE;
-        int gMaxY = Integer.MIN_VALUE;
-        int gMaxZ = Integer.MIN_VALUE;
 
         for (int y = 0; y < SIZE; y++) {
             int wy = minY + y;
@@ -128,20 +146,30 @@ final class SectionSnapshot {
                     }
 
                     cursor.set(wx, wy, wz);
-                    IBlockState state = chunk.getBlockState(cursor);
+                    ExtendedBlockStorage storage = chunk.getBlockStorageArray()[wy >> 4];
+                    IBlockState state;
+                    if (debugWorld) {
+                        state = chunk.getBlockState(cursor);
+                        sky[index] = (byte) chunk.getLightFor(EnumSkyBlock.SKY, cursor);
+                        block[index] = (byte) chunk.getLightFor(EnumSkyBlock.BLOCK, cursor);
+                    } else if (storage == null) {
+                        // Same values Chunk.getBlockState/getLightFor return for an empty storage section.
+                        state = air;
+                        sky[index] = (byte) (chunk.canSeeSky(cursor) ? EnumSkyBlock.SKY.defaultLightValue : 0);
+                        block[index] = 0;
+                    } else {
+                        state = storage.get(wx & 15, wy & 15, wz & 15);
+                        sky[index] = (byte) (hasNoSky ? 0 : storage.getExtSkylightValue(wx & 15, wy & 15, wz & 15));
+                        block[index] = (byte) storage.getExtBlocklightValue(wx & 15, wy & 15, wz & 15);
+                    }
                     states[index] = state;
-                    sky[index] = (byte) chunk.getLightFor(EnumSkyBlock.SKY, cursor);
-                    block[index] = (byte) chunk.getLightFor(EnumSkyBlock.BLOCK, cursor);
 
                     if (innerYZ && wx >= originX && wx < originX + 16) {
                         Block blockType = state.getBlock();
                         if (blockType.getRenderType() != -1) {
-                            if (wx < gMinX) gMinX = wx;
-                            if (wy < gMinY) gMinY = wy;
-                            if (wz < gMinZ) gMinZ = wz;
-                            if (wx > gMaxX) gMaxX = wx;
-                            if (wy > gMaxY) gMaxY = wy;
-                            if (wz > gMaxZ) gMaxZ = wz;
+                            for (EnumWorldBlockLayer layer : layers) {
+                                if (blockType.canRenderInLayer(layer)) expand(layerBox, layer.ordinal(), wx, wy, wz);
+                            }
                         }
                         if (blockType.hasTileEntity(state)) {
                             // RegionRenderCache uses QUEUED; doing it here keeps creation on the client thread.
@@ -178,11 +206,27 @@ final class SectionSnapshot {
             }
         }
 
-        GeometryBounds bounds = gMinX == Integer.MAX_VALUE
-                ? null
-                : new GeometryBounds(gMinX, gMinY, gMinZ, gMaxX, gMaxY, gMaxZ);
-        return new SectionSnapshot(world, originX, originY, originZ, world.provider.getHasNoSky(), levelsEmpty,
-                bounds, states, sky, block, biomes, tiles);
+        GeometryBounds[] layerBounds = new GeometryBounds[layers.length];
+        for (int i = 0; i < layers.length; i++) {
+            int[] box = layerBox[i];
+            if (box != null) layerBounds[i] = new GeometryBounds(box[0], box[1], box[2], box[3], box[4], box[5]);
+        }
+        return new SectionSnapshot(world, originX, originY, originZ, hasNoSky, false,
+                layerBounds, states, sky, block, biomes, tiles);
+    }
+
+    private static void expand(int[][] boxes, int layer, int x, int y, int z) {
+        int[] box = boxes[layer];
+        if (box == null) {
+            boxes[layer] = new int[]{x, y, z, x, y, z};
+            return;
+        }
+        if (x < box[0]) box[0] = x;
+        if (y < box[1]) box[1] = y;
+        if (z < box[2]) box[2] = z;
+        if (x > box[3]) box[3] = x;
+        if (y > box[4]) box[4] = y;
+        if (z > box[5]) box[5] = z;
     }
 
     boolean matches(World requestedWorld, BlockPos from) {
@@ -193,13 +237,13 @@ final class SectionSnapshot {
     }
 
     boolean contains(int x, int y, int z) {
-        return x >= minX && x < minX + SIZE
+        return states != null && x >= minX && x < minX + SIZE
                 && y >= minY && y < minY + SIZE
                 && z >= minZ && z < minZ + SIZE;
     }
 
     boolean containsColumn(int x, int z) {
-        return x >= minX && x < minX + SIZE && z >= minZ && z < minZ + SIZE;
+        return biomes != null && x >= minX && x < minX + SIZE && z >= minZ && z < minZ + SIZE;
     }
 
     IBlockState getBlockState(int x, int y, int z) {
