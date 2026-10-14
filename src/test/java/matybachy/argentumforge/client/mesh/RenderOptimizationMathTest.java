@@ -21,4 +21,26 @@ public class RenderOptimizationMathTest {
         Assert.assertEquals(1, RenderOptimizationMath.throttledParticleSetting(0, 1));
         Assert.assertEquals(2, RenderOptimizationMath.throttledParticleSetting(2, 1));
     }
+
+    @Test
+    public void cloudFallbackRequiresVanillaCloudsDisabledAndNoCustomSky() {
+        Assert.assertTrue(RenderOptimizationMath.shouldRunCloudFallback(0, true, true, false));
+        Assert.assertFalse(RenderOptimizationMath.shouldRunCloudFallback(2, true, true, false));
+        Assert.assertFalse(RenderOptimizationMath.shouldRunCloudFallback(0, true, true, true));
+    }
+
+    @Test
+    public void entityDistanceCullingSkipsNamedOrLeashedEntities() {
+        Assert.assertTrue(RenderOptimizationMath.shouldUseEntityDistanceCulling(true, true, true, false, false));
+        Assert.assertFalse(RenderOptimizationMath.shouldUseEntityDistanceCulling(true, true, true, true, false));
+        Assert.assertFalse(RenderOptimizationMath.shouldUseEntityDistanceCulling(true, true, true, false, true));
+    }
+
+    @Test
+    public void optionalEffectsRequireCapabilitiesAndMainThread() {
+        Assert.assertTrue(RenderOptimizationMath.shouldRunOptionalEffects(true, true, false, true));
+        Assert.assertFalse(RenderOptimizationMath.shouldRunOptionalEffects(true, true, false, false));
+        Assert.assertFalse(RenderOptimizationMath.shouldRunOptionalEffects(true, false, false, true));
+        Assert.assertFalse(RenderOptimizationMath.shouldRunOptionalEffects(true, true, true, true));
+    }
 }
