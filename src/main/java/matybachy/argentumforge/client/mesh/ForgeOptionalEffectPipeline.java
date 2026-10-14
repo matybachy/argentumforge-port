@@ -16,7 +16,12 @@ public final class ForgeOptionalEffectPipeline implements OptionalEffectPipeline
 
     @Override
     public boolean isSupported() {
-        return ArgentumConfig.enableOptionalEffects && OpenGlHelper.isFramebufferEnabled() && !disabledByFailure;
+        return RenderOptimizationMath.shouldRunOptionalEffects(
+                ArgentumConfig.enableOptionalEffects,
+                OpenGlHelper.isFramebufferEnabled(),
+                disabledByFailure,
+                isOnClientThread()
+        );
     }
 
     @Override
@@ -25,14 +30,24 @@ public final class ForgeOptionalEffectPipeline implements OptionalEffectPipeline
         Minecraft mc = Minecraft.getMinecraft();
         if (mc == null) return;
         if (!ensureBuffer(mc)) return;
-        effectBuffer.bindFramebuffer(true);
-        effectBuffer.framebufferClear();
-        active = true;
+        try {
+            effectBuffer.bindFramebuffer(true);
+            effectBuffer.framebufferClear();
+            active = true;
+        } catch (Throwable ignored) {
+            active = false;
+            disableDueToFailure();
+        }
     }
 
     @Override
     public void end() {
         if (!active) return;
+        if (!isOnClientThread()) {
+            active = false;
+            disabledByFailure = true;
+            return;
+        }
         Minecraft mc = Minecraft.getMinecraft();
         active = false;
         if (mc == null || effectBuffer == null) return;
@@ -47,11 +62,13 @@ public final class ForgeOptionalEffectPipeline implements OptionalEffectPipeline
             float alpha = ArgentumConfig.optionalEffectsCompositeAlpha / 100.0f;
             GL11.glColor4f(1.0f, 1.0f, 1.0f, alpha);
             effectBuffer.framebufferRenderExt(mc.displayWidth, mc.displayHeight, true);
+        } catch (Throwable ignored) {
+            disableDueToFailure();
+        } finally {
             GL11.glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
             GL11.glDepthMask(true);
             GL11.glEnable(GL11.GL_DEPTH_TEST);
-        } catch (Throwable ignored) {
-            disableDueToFailure();
+            GL11.glEnable(GL11.GL_ALPHA_TEST);
         }
     }
 
@@ -86,5 +103,16 @@ public final class ForgeOptionalEffectPipeline implements OptionalEffectPipeline
         }
         bufferWidth = -1;
         bufferHeight = -1;
+    }
+
+    private boolean isOnClientThread() {
+        Minecraft mc = Minecraft.getMinecraft();
+        if (mc == null) return false;
+        try {
+            Object result = mc.getClass().getMethod("isCallingFromMinecraftThread").invoke(mc);
+            return result instanceof Boolean ? ((Boolean) result).booleanValue() : true;
+        } catch (Throwable ignored) {
+            return true;
+        }
     }
 }

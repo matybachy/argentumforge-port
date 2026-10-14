@@ -15,6 +15,8 @@ This repository currently contains an experimental Forge 1.8.9 mod project with 
 - Rebuild queue with priority + per-tick budget: Implemented (distance-prioritized and radius-filtered candidates)
 - Correct opaque/cutout/translucent layering: Implemented
 - Texture atlas / UV mapping (with missing-sprite fallback): Implemented
+- Terrain fallback path: Implemented (state-aware block bounds first, then collision/selection AABB, then conservative cross/box)
+- Texture fallback path: Partial (state/model/default-state lookup before missing sprite; no fragile name guessing)
 - Lighting and AO (lightweight): Implemented (conservative per-vertex approximation with emissive full-bright fallback and corner-neighbor AO sampling)
 - Chunk visibility and frustum culling: Implemented (radius + conservative directional backface culling)
 - Chunk/world/block invalidation hooks: Implemented (chunk load/unload, block place/break, multiplace, and chunk-edge spillover)
@@ -22,9 +24,10 @@ This repository currently contains an experimental Forge 1.8.9 mod project with 
 - Entity hooks: Implemented (opt-in living-entity distance culling with vanilla fallback default)
 - Particle hooks: Implemented (opt-in particle throttling floor with automatic restore fallback)
 - Cloud hooks: Implemented (opt-in conservative cloud layer renderer; only when vanilla clouds are disabled)
-- Optional post-effect pipeline: Implemented (capability-gated LWJGL2 framebuffer composite with self-disable fallback)
-- Item/block-entity hooks: Implemented (fallback-only compatibility toggles; no custom replacement renderers in this pass)
-- Weather hooks: Implemented (fallback-only compatibility toggle; no custom rain/snow renderer in this pass)
+- Optional rendering fallback behavior: Partial (entity/particle/cloud guarded paths with compatibility checks; item/weather/block-entity remain vanilla fallback-only)
+- Optional post-effect pipeline: Partial (capability + thread-gated LWJGL2 framebuffer composite with self-disable no-effect fallback)
+- Item/block-entity hooks: Fallback-only (always vanilla rendering in this pass)
+- Weather hooks: Fallback-only (always vanilla rain/snow rendering in this pass)
 - Configuration/settings: Implemented (Forge config, disabled by default)
 - Compatibility modules: Implemented (texture/lighting/GPU/effects interfaces)
 - Deterministic pure-Java helper tests: Implemented (`MeshMathTest`)
@@ -34,7 +37,7 @@ This repository currently contains an experimental Forge 1.8.9 mod project with 
 - Cloud optimization: Partial (conservative optional cloud layer; not full vanilla cloud parity)
 - Weather optimization: Fallback-only (no safe rain/snow replacement path wired in this pass)
 - Block-entity optimization: Fallback-only (no TESR replacement to preserve custom renderer compatibility)
-- Post-processing pipeline: Partial (framebuffer composite path only; no shader chain in Forge 1.8.9 baseline)
+- Post-processing pipeline: Partial (framebuffer composite path only; no shader chain in Forge 1.8.9 baseline; disabled on unsupported capability/thread/runtime-failure)
 - Full upstream parity: Blocked by target-platform differences and rendering abstraction gaps
 
 ## Build results
@@ -47,7 +50,7 @@ This repository currently contains an experimental Forge 1.8.9 mod project with 
 - The experimental render path is toggled with `ArgentumForge.ENABLE_EXPERIMENTAL_CHUNK_RENDERER` and can be disabled to preserve vanilla behavior.
 - The config default leaves the experimental renderer disabled.
 - Terrain path uses model/atlas/light fallbacks to stay buildable on Forge 1.8.9.
-- Unsupported/failed model decoding falls back to bounds/cross/fluid geometry instead of dropping terrain faces.
+- Unsupported/failed model decoding falls back to state-aware bounds/collision-shape/cross/fluid geometry instead of dropping terrain faces.
 - Fluid meshing now suppresses same-material internal faces (including flowing/still variants), uses Forge-style falling-level normalization, and renders visible bottom faces.
 
 ## Remaining blockers
