@@ -76,7 +76,7 @@ public final class ArgentumConfig {
             enableItemDistanceCulling = cfg.getBoolean("enableItemDistanceCulling", CAT_FEATURES, false, "Enable opt-in distance culling for dropped item entities.");
             itemCullingDistance = cfg.getInt("itemCullingDistance", CAT_FEATURES, 96, 16, 512, "Maximum render distance in blocks when dropped-item distance culling is enabled.");
             enableBlockEntityHooks = cfg.getBoolean("enableBlockEntityHooks", CAT_FEATURES, false, "Enable opt-in block-entity renderer hooks.");
-            enableBlockEntityDistanceCulling = cfg.getBoolean("enableBlockEntityDistanceCulling", CAT_FEATURES, false, "Skip vanilla chest, ender chest, sign, skull and banner renderers beyond blockEntityCullingDistance.");
+            enableBlockEntityDistanceCulling = cfg.getBoolean("enableBlockEntityDistanceCulling", CAT_FEATURES, false, "Skip vanilla chest, ender chest, sign, skull, banner, mob spawner and enchantment table renderers beyond blockEntityCullingDistance.");
             blockEntityCullingDistance = cfg.getInt("blockEntityCullingDistance", CAT_FEATURES, 48, 8, 256, "Distance in blocks for block-entity distance culling.");
             enableParticleHooks = cfg.getBoolean("enableParticleHooks", CAT_FEATURES, false, "Enable optional particle throttling hooks with vanilla fallback.");
             particleThrottleSetting = cfg.getInt("particleThrottleSetting", CAT_FEATURES, 1, 0, 2, "Particle quality floor when particle throttling is enabled (0=all, 1=decreased, 2=minimal).");

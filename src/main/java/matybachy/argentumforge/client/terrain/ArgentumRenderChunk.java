@@ -3,6 +3,7 @@ package matybachy.argentumforge.client.terrain;
 import net.minecraft.client.renderer.RegionRenderCache;
 import net.minecraft.client.renderer.RenderGlobal;
 import net.minecraft.client.renderer.chunk.ChunkCompileTaskGenerator;
+import net.minecraft.client.renderer.chunk.CompiledChunk;
 import net.minecraft.client.renderer.chunk.RenderChunk;
 import net.minecraft.util.BlockPos;
 import net.minecraft.world.World;
@@ -42,6 +43,12 @@ final class ArgentumRenderChunk extends RenderChunk implements SnapshotRenderChu
     protected RegionRenderCache createRegionRenderCache(World world, BlockPos from, BlockPos to, int subtract) {
         RegionRenderCache cache = support.createCache(world, from, to, subtract);
         return cache != null ? cache : super.createRegionRenderCache(world, from, to, subtract);
+    }
+
+    @Override
+    public void setCompiledChunk(CompiledChunk compiledChunkIn) {
+        super.setCompiledChunk(compiledChunkIn);
+        if (support != null) support.onCompiledChunkInstalled(compiledChunkIn);
     }
 
     @Override

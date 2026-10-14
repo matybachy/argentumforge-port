@@ -5,7 +5,9 @@ import matybachy.argentumforge.ArgentumForge;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.tileentity.TileEntityBannerRenderer;
 import net.minecraft.client.renderer.tileentity.TileEntityChestRenderer;
+import net.minecraft.client.renderer.tileentity.TileEntityEnchantmentTableRenderer;
 import net.minecraft.client.renderer.tileentity.TileEntityEnderChestRenderer;
+import net.minecraft.client.renderer.tileentity.TileEntityMobSpawnerRenderer;
 import net.minecraft.client.renderer.tileentity.TileEntityRendererDispatcher;
 import net.minecraft.client.renderer.tileentity.TileEntitySignRenderer;
 import net.minecraft.client.renderer.tileentity.TileEntitySkullRenderer;
@@ -13,7 +15,9 @@ import net.minecraft.client.renderer.tileentity.TileEntitySpecialRenderer;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.tileentity.TileEntityBanner;
 import net.minecraft.tileentity.TileEntityChest;
+import net.minecraft.tileentity.TileEntityEnchantmentTable;
 import net.minecraft.tileentity.TileEntityEnderChest;
+import net.minecraft.tileentity.TileEntityMobSpawner;
 import net.minecraft.tileentity.TileEntitySign;
 import net.minecraft.tileentity.TileEntitySkull;
 import net.minecraftforge.fml.relauncher.ReflectionHelper;
@@ -25,7 +29,9 @@ import java.util.IdentityHashMap;
 import java.util.Map;
 
 /**
- * Opt-in distance limit for a fixed set of vanilla block-entity renderers.
+ * Opt-in distance limit for a fixed set of vanilla block-entity renderers (chest, ender chest, sign,
+ * skull, banner, mob spawner, enchantment table). Pistons, beacons and end portals are excluded:
+ * they draw moving blocks, global beams or portal surfaces that must stay visible.
  *
  * <p>Forge 1.8.9 has no cancelable tile-entity render event. TileEntityRendererDispatcher looks
  * renderers up in its private {@code mapSpecialRenderers} (SRG {@code field_147559_m}), so the entries
@@ -43,6 +49,9 @@ public final class BlockEntityDistanceCulling {
             {TileEntitySign.class, TileEntitySignRenderer.class},
             {TileEntitySkull.class, TileEntitySkullRenderer.class},
             {TileEntityBanner.class, TileEntityBannerRenderer.class},
+            // Spinning spawner entity and floating book: purely decorative, but render an entity/model per frame.
+            {TileEntityMobSpawner.class, TileEntityMobSpawnerRenderer.class},
+            {TileEntityEnchantmentTable.class, TileEntityEnchantmentTableRenderer.class},
     };
     private static final Map<Class<?>, Boolean> CULLABLE_CLASSES = new IdentityHashMap<Class<?>, Boolean>();
 
