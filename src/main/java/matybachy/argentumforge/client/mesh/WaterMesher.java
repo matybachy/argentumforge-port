@@ -6,15 +6,13 @@ import net.minecraft.util.BlockPos;
 import net.minecraft.util.EnumFacing;
 import net.minecraft.world.World;
 
-import java.util.ArrayList;
-import java.util.List;
 
 /**
  * Generates water-surface quads for the active chunk so liquid blocks render in a translucent pass.
  */
 public final class WaterMesher {
     public MeshData build(World world, int chunkX, int chunkZ) {
-        List<Float> vertices = new ArrayList<Float>();
+        FloatArrayList vertices = new FloatArrayList();
         int baseX = chunkX << 4;
         int baseZ = chunkZ << 4;
 
@@ -34,7 +32,7 @@ public final class WaterMesher {
             }
         }
 
-        return new MeshData(toFloatArray(vertices));
+        return new MeshData(vertices.toArray());
     }
 
     private boolean isWaterSurfaceVisible(World world, int x, int y, int z) {
@@ -45,7 +43,7 @@ public final class WaterMesher {
         return !above.getMaterial().isLiquid();
     }
 
-    private void emitSurface(World world, List<Float> verts, int x, int y, int z, IBlockState state, Block block) {
+    private void emitSurface(World world, FloatArrayList verts, int x, int y, int z, IBlockState state, Block block) {
         BlockPos pos = new BlockPos(x, y, z);
         TerrainTextureAtlas.FaceUV uv = TerrainTextureAtlas.getFaceUVs(world, pos, state, EnumFacing.UP);
         float[] color = TerrainTextureAtlas.getFaceColor(world, pos, state, true);
@@ -64,7 +62,7 @@ public final class WaterMesher {
         push(verts, x, y + 1, z + 1, uv.u0, uv.v1, r, g, b, alpha);
     }
 
-    private void push(List<Float> verts, float x, float y, float z, float u, float v, float r, float g, float b, float a) {
+    private void push(FloatArrayList verts, float x, float y, float z, float u, float v, float r, float g, float b, float a) {
         verts.add(x);
         verts.add(y);
         verts.add(z);
@@ -82,14 +80,6 @@ public final class WaterMesher {
         return value;
     }
 
-    private float[] toFloatArray(List<Float> values) {
-        if (values.isEmpty()) return new float[0];
-        float[] out = new float[values.size()];
-        for (int i = 0; i < values.size(); i++) {
-            out[i] = values.get(i);
-        }
-        return out;
-    }
 
     public static final class MeshData {
         private final float[] vertices;

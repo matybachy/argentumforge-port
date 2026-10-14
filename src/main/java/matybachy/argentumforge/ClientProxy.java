@@ -1,9 +1,13 @@
 package matybachy.argentumforge;
 
 import matybachy.argentumforge.client.ArgentumRenderer;
+import matybachy.argentumforge.client.blockentity.BlockEntityDistanceCulling;
 import matybachy.argentumforge.client.mesh.ClientWorldHooks;
 import matybachy.argentumforge.client.mesh.ChunkMeshManager;
 import matybachy.argentumforge.client.mesh.RendererValidation;
+import matybachy.argentumforge.client.terrain.IntegratedTerrain;
+import net.minecraft.client.Minecraft;
+import net.minecraftforge.client.event.RenderGameOverlayEvent;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 import net.minecraftforge.fml.common.gameevent.TickEvent;
@@ -20,7 +24,9 @@ public class ClientProxy extends CommonProxy {
     public void preInit() {
         RendererValidation.validateStaticInvariants();
         renderer = new ArgentumRenderer();
-        ArgentumForge.MESH_MANAGER.setEnabled(ArgentumForge.ENABLE_EXPERIMENTAL_CHUNK_RENDERER);
+        // The legacy overlay mesh manager only runs in terrainMode=overlay.
+        ArgentumForge.MESH_MANAGER.setEnabled(ArgentumForge.ENABLE_EXPERIMENTAL_CHUNK_RENDERER
+                && ArgentumConfig.isOverlayTerrainMode());
         worldHooks = new ClientWorldHooks(meshManager);
         MinecraftForge.EVENT_BUS.register(this);
         MinecraftForge.EVENT_BUS.register(worldHooks);
@@ -38,16 +44,29 @@ public class ClientProxy extends CommonProxy {
 
     @SubscribeEvent
     public void onClientTick(TickEvent.ClientTickEvent event) {
-        if (event.phase == TickEvent.Phase.END) {
-            if (renderer != null) renderer.onClientTick();
-            // Only the experimental terrain mesh rebuild is suppressed when the narrow
-            // terrain compatibility gate is active. Optional hooks (entity, item, particle,
-            // weather, cloud) still run through renderer.onClientTick().
-            if (ArgentumForge.ENABLE_EXPERIMENTAL_CHUNK_RENDERER
-                    && !ArgentumConfig.isExperimentalRendererDisabledByCompatibility()) {
-                meshManager.onTick();
-            }
+        if (event.phase != TickEvent.Phase.END) return;
+        if (renderer != null) renderer.onClientTick();
+        // The FeatherOpt terrain gate suppresses only the terrain path; optional hooks
+        // (entity, item, particle, weather, cloud, block entity) keep their own settings.
+        if (ArgentumForge.ENABLE_EXPERIMENTAL_CHUNK_RENDERER
+                && ArgentumConfig.isOverlayTerrainMode()
+                && !ArgentumConfig.isExperimentalRendererDisabledByCompatibility()) {
+            meshManager.onTick();
         }
+        IntegratedTerrain.onClientTick(Minecraft.getMinecraft());
+        BlockEntityDistanceCulling.onClientTick();
+    }
+
+    @SubscribeEvent
+    public void onRenderTick(TickEvent.RenderTickEvent event) {
+        if (event.phase == TickEvent.Phase.START) IntegratedTerrain.onRenderFrameStart();
+    }
+
+    @SubscribeEvent
+    public void onDebugOverlay(RenderGameOverlayEvent.Text event) {
+        Minecraft mc = Minecraft.getMinecraft();
+        if (mc == null || mc.gameSettings == null || !mc.gameSettings.showDebugInfo || event.left == null) return;
+        IntegratedTerrain.appendDebugLines(event.left);
     }
 
     public ChunkMeshManager getMeshManager() {

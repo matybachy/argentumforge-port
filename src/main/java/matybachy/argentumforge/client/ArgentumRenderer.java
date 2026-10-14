@@ -28,15 +28,20 @@ public class ArgentumRenderer {
     @SubscribeEvent
     public void onRenderWorldLast(RenderWorldLastEvent event) {
         if (!ArgentumForge.ENABLE_EXPERIMENTAL_CHUNK_RENDERER) return;
-        if (ArgentumConfig.isExperimentalRendererDisabledByCompatibility()) return;
         if (mc.theWorld == null) return;
         Entity view = mc.getRenderViewEntity();
         if (view == null) return;
 
+        // terrainMode=integrated draws terrain through RenderGlobal's own passes, so the late
+        // pass only runs for the legacy overlay or for the optional cloud layer.
+        boolean drawOverlay = ArgentumConfig.isOverlayTerrainMode()
+                && !ArgentumConfig.isExperimentalRendererDisabledByCompatibility();
+        if (!drawOverlay && !optionalHooks.hasLateRenderWork()) return;
+
         double px = view.lastTickPosX + (view.posX - view.lastTickPosX) * event.partialTicks;
         double py = view.lastTickPosY + (view.posY - view.lastTickPosY) * event.partialTicks;
         double pz = view.lastTickPosZ + (view.posZ - view.lastTickPosZ) * event.partialTicks;
-        if (meshManager != null) meshManager.prepareVisibility(view, px, py, pz);
+        if (drawOverlay && meshManager != null) meshManager.prepareVisibility(view, px, py, pz);
 
         boolean effectStarted = false;
         GL11.glPushAttrib(GL11.GL_ENABLE_BIT | GL11.GL_COLOR_BUFFER_BIT | GL11.GL_DEPTH_BUFFER_BIT
@@ -48,20 +53,23 @@ public class ArgentumRenderer {
             // Evaluate support before beginning the effect. Do not recheck support
             // during cleanup: a failure may disable the pipeline, but cleanup
             // must still be attempted in case framebuffer state needs restoration.
-            if (effectPipeline.isSupported()) {
+            // The framebuffer effect only composites the legacy overlay pass.
+            if (drawOverlay && effectPipeline.isSupported()) {
                 effectPipeline.begin();
                 effectStarted = true;
             }
 
-            TerrainTextureAtlas.bindTerrainTextureAtlas();
-            GL11.glEnable(GL11.GL_TEXTURE_2D);
+            if (drawOverlay) {
+                TerrainTextureAtlas.bindTerrainTextureAtlas();
+                GL11.glEnable(GL11.GL_TEXTURE_2D);
+            }
             GL11.glEnable(GL11.GL_BLEND);
             GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
             GL11.glDisable(GL11.GL_CULL_FACE);
 
             GL11.glTranslated(-px, -py, -pz);
 
-            if (meshManager != null) {
+            if (drawOverlay && meshManager != null) {
                 meshManager.render();
             }
         } finally {

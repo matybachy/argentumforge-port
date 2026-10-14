@@ -12,10 +12,13 @@ import net.minecraft.world.biome.BiomeGenBase;
 import net.minecraftforge.client.IRenderHandler;
 import org.lwjgl.opengl.GL11;
 
+import java.lang.ref.WeakReference;
+
 public final class OptimizedWeatherRenderer extends IRenderHandler {
     private static final ResourceLocation RAIN_TEXTURE = new ResourceLocation("textures/environment/rain.png");
     private static final ResourceLocation SNOW_TEXTURE = new ResourceLocation("textures/environment/snow.png");
     private static final double NEAR_DISTANCE_SQ = 24.0D * 24.0D;
+    private final WeatherColumnCache columns = new WeatherColumnCache();
     private boolean disabledByFailure;
 
     @Override
@@ -76,6 +79,7 @@ public final class OptimizedWeatherRenderer extends IRenderHandler {
             GL11.glAlphaFunc(GL11.GL_GREATER, 0.01F);
             GL11.glDepthMask(false);
 
+            columns.refresh(world, minX, minZ, maxX, maxZ, cameraX, cameraZ, radiusCeil + 1);
             drawPass(mc, world, partialTicks, cameraX, cameraY, cameraZ, weatherStrength, sideX, sideZ, lookX, lookZ, maxDistanceSq, minForwardDot, minY, maxY, minX, maxX, minZ, maxZ, false);
             drawPass(mc, world, partialTicks, cameraX, cameraY, cameraZ, weatherStrength, sideX, sideZ, lookX, lookZ, maxDistanceSq, minForwardDot, minY, maxY, minX, maxX, minZ, maxZ, true);
 
@@ -134,18 +138,15 @@ public final class OptimizedWeatherRenderer extends IRenderHandler {
                     continue;
                 }
 
-                BlockPos columnPos = new BlockPos(x, 0, z);
-                BiomeGenBase biome = world.getBiomeGenForCoords(columnPos);
-                if (biome == null) continue;
-                boolean snow = biome.getEnableSnow();
-                boolean rain = biome.canSpawnLightningBolt() && !snow;
+                int columnType = columns.type(x, z);
+                boolean snow = columnType == WeatherColumnCache.SNOW;
                 if (snowPass) {
                     if (!snow) continue;
-                } else if (!rain) {
+                } else if (columnType != WeatherColumnCache.RAIN) {
                     continue;
                 }
 
-                int precipitationY = world.getPrecipitationHeight(columnPos).getY();
+                int precipitationY = columns.precipitationHeight(x, z);
                 int yStart = Math.max(precipitationY, minY);
                 int yEnd = maxY;
                 if (yStart >= yEnd) continue;
@@ -174,5 +175,78 @@ public final class OptimizedWeatherRenderer extends IRenderHandler {
             }
         }
         GL11.glEnd();
+    }
+
+    /**
+     * Biome precipitation type and precipitation height per column, rebuilt at most once per world
+     * tick or when the camera's column window moves, instead of twice per frame. Rain/snow selection
+     * is unchanged: snow if the biome enables snow, otherwise rain if it can spawn lightning.
+     * Precipitation height can lag a block change by at most one client tick.
+     */
+    private static final class WeatherColumnCache {
+        static final byte NONE = 0;
+        static final byte RAIN = 1;
+        static final byte SNOW = 2;
+        private WeakReference<WorldClient> worldRef = new WeakReference<WorldClient>(null);
+        private long tick = Long.MIN_VALUE;
+        private int minX;
+        private int minZ;
+        private int width;
+        private int depth;
+        private byte[] types = new byte[0];
+        private int[] heights = new int[0];
+
+        void refresh(WorldClient world, int minX, int minZ, int maxX, int maxZ, double cameraX, double cameraZ, int radius) {
+            int newWidth = maxX - minX + 1;
+            int newDepth = maxZ - minZ + 1;
+            long now = world.getTotalWorldTime();
+            if (worldRef.get() == world && now == tick && minX == this.minX && minZ == this.minZ
+                    && newWidth == width && newDepth == depth) {
+                return;
+            }
+            int size = newWidth * newDepth;
+            if (types.length < size) {
+                types = new byte[size];
+                heights = new int[size];
+            }
+            double radiusSq = (double) radius * radius;
+            for (int z = 0; z < newDepth; z++) {
+                for (int x = 0; x < newWidth; x++) {
+                    int index = z * newWidth + x;
+                    int wx = minX + x;
+                    int wz = minZ + z;
+                    double dx = wx + 0.5D - cameraX;
+                    double dz = wz + 0.5D - cameraZ;
+                    byte type = NONE;
+                    BlockPos column = new BlockPos(wx, 0, wz);
+                    if (dx * dx + dz * dz <= radiusSq) {
+                        BiomeGenBase biome = world.getBiomeGenForCoords(column);
+                        if (biome != null) {
+                            if (biome.getEnableSnow()) type = SNOW;
+                            else if (biome.canSpawnLightningBolt()) type = RAIN;
+                        }
+                    }
+                    types[index] = type;
+                    heights[index] = type == NONE ? 0 : world.getPrecipitationHeight(column).getY();
+                }
+            }
+            worldRef = new WeakReference<WorldClient>(world);
+            tick = now;
+            this.minX = minX;
+            this.minZ = minZ;
+            width = newWidth;
+            depth = newDepth;
+        }
+
+        int type(int x, int z) {
+            int lx = x - minX;
+            int lz = z - minZ;
+            if (lx < 0 || lz < 0 || lx >= width || lz >= depth) return NONE;
+            return types[lz * width + lx];
+        }
+
+        int precipitationHeight(int x, int z) {
+            return heights[(z - minZ) * width + (x - minX)];
+        }
     }
 }

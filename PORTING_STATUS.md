@@ -2,67 +2,59 @@
 
 ## Scope
 
-This repository targets Minecraft Forge 1.8.9, Forge 11.15.1.2318, Java 8, and LWJGL 2. It is an experimental port, not a complete Argentum or Celeritas renderer. The source has no Mixin configuration, coremod entry point, access transformer, or replacement for `RenderGlobal`'s chunk compilation and draw path.
+Target: Minecraft Forge 1.8.9 (Forge `1.8.9-11.15.1.2318-1.8.9`), MCP `stable_22`, Java 8, LWJGL 2. This is an experimental port, not a complete Argentum or Celeritas renderer. The project has no Mixin configuration, coremod, access transformer or `IClassTransformer`. Terrain integration replaces `RenderGlobal`'s chunk factory and render container at runtime through reflection.
 
-## Feature inventory
+**Validation status: nothing in this revision was compiled, built, unit-tested or run in Minecraft.** Every claim below comes from source inspection of this repository, the MCP 1.8.9 decompiled sources, the Forge 1.8.9 patches and userdev artifact (2318), the MCP `stable_22`/SRG mappings, and the upstream repositories named below.
 
-| Area | Source status | Current limit |
-| --- | --- | --- |
-| Client lifecycle | Connected | `ClientProxy` registers the client tick, world hooks, renderer, and optional render hooks. |
-| Terrain and chunks | Prototype overlay | Meshes are made from live `World` state on the client tick, uploaded to three VBOs, and drawn from `RenderWorldLastEvent`. Vanilla terrain has already rendered; this is not a replacement or a terrain performance optimization. It can duplicate terrain, and the option is disabled by default. |
-| Block models | Partial | Baked quads are read directly, with approximate fallback boxes and crosses. This does not follow Forge's full block-renderer pipeline for every modded block. |
-| Fluids and lighting | Partial | Fluid geometry, biome tint, block/sky light, and ambient occlusion are approximations. The vertex format has no lightmap coordinates. |
-| Mesh scheduling | Synchronous, bounded | Rebuilds run on the client tick and touch mutable world state. The radius, per-tick budget, retry delay, loaded-chunk filter, dirty queue pruning, and VBO cleanup are managed. There are no worker threads or immutable chunk snapshots. |
-| Chunk visibility | Connected to overlay | Uses Forge 1.8.9's `Frustum` with world-space chunk bounds, plus a configurable chunk-radius cap. If frustum capture fails, it fails open to the radius filter. It does not control vanilla chunk visibility and has no section visibility graph or occlusion query. |
-| Invalidation | Partial | Chunk load/unload, world changes, texture-atlas restitch, and Forge block place/break/multi-place events invalidate meshes. Changes made by arbitrary mod code without these events are not observed. |
-| Entity distance culling | Connected, opt-in | `RenderLivingEvent.Pre` can cancel distant vanilla living-entity renders. It skips custom renderers, custom-named, mounted, riding, and leashed entities. It is disabled by default. |
-| Dropped items | Connected, opt-in | `EntityItem.renderDistanceWeight` is adjusted past the configured threshold and restored. Minecraft's own range calculation still determines the effective cutoff; no item model cache or draw batching is present. |
-| Particles | Connected, opt-in | The particle setting is temporarily throttled and restored, including ordinary setting changes observed while the hook is active. This is not particle visibility culling. |
-| Block entities | Not implemented | There is no connected block-entity optimization. The old capability probe did not find a Forge 1.8.9 render event and has been removed. Renderers remain on vanilla behavior. |
-| Weather | Connected, opt-in approximation | The provider renderer is installed only if no other renderer is present, uses biome and precipitation-height checks, and is removed on disable/world changes or render failure. Rain/snow visuals and visibility are not vanilla-equivalent. |
-| Clouds | Connected, opt-in fallback | A flat translucent grid is drawn only with vanilla clouds disabled and no custom sky renderer. It does not reproduce vanilla cloud animation or geometry. |
-| Post effects | Connected, opt-in overlay | The framebuffer pass wraps only the late custom pass. It does not capture the complete vanilla world frame or implement a shader chain. The optional effects path is independently opt-in; its FeatherOpt compatibility gate defaults off because source inspection found no concrete conflict. |
-| Items, fonts, labels, GUI/HUD, enchantment glint | Not implemented | No connected optimization hooks or caches are present for these paths. |
-| FeatherOpt coexistence | Source-level precautions only | ArgentumForge has no FeatherOpt dependency and does not bundle its source. Renderer/framebuffer interaction has not been runtime-verified. |
+## Feature matrix
 
-`WaterMesher`, `TerrainTracker`, `RenderLayer`, and several compatibility helpers are not connected to the active draw path. Their presence is not counted as a shipped optimization.
+Legend: **Connected** = called from a real Minecraft/Forge code path. **Partial** = connected, with documented gaps. **Disabled** = present but off by default or off by design. **Not implemented** = no source path.
 
-## Source changes in this revision
+| Area | Status | Source path and behavior | Remaining gaps |
+| --- | --- | --- | --- |
+| Master switch | Connected | `enableExperimentalRenderer` (default `false`) gates every feature. | - |
+| Terrain integration (`terrainMode=integrated`) | Connected | `client/terrain/IntegratedTerrain` swaps `RenderGlobal.renderChunkFactory` (`field_175007_a`) and `renderContainer` (`field_174996_N`) for `ArgentumRenderChunkFactory` and `ArgentumVboRenderList`/`ArgentumDisplayListRenderList`, then calls `RenderGlobal.loadRenderers()`. Vanilla scheduling, worker compilation, uploads and the per-layer draws all go through these objects. No overlay is drawn. It reinstalls if a VBO toggle makes `loadRenderers` recreate vanilla objects, and restores vanilla objects when disabled or on failure. | Runtime behavior is unverified. It relies on Forge's `createRegionRenderCache` hook, which is present in the 2318 userdev patch. |
+| Section compilation inputs | Partial | `SectionSnapshot` captures 20x20x20 block states, raw sky/block light, biomes and tile-entity references on the client thread, when `makeCompileTaskChunk` runs. Workers read it through `SnapshotRegionRenderCache`, so they never touch live chunk storage for in-region reads. Light logic mirrors `ChunkCache.getLightForExt`. | Tile-entity objects are shared live references, the same as vanilla. Reads outside the region (not expected) fall back to the vanilla cache and are counted. |
+| Worker scheduling | Connected (vanilla) | Uses vanilla `ChunkRenderDispatcher` worker threads and its bounded queue (100 tasks). Uploads and GL deletion stay on the client thread. Stale results are rejected by vanilla task-status checks. ArgentumForge adds: snapshot paired to the exact task object, `terrainSnapshotsPerFrame` budget, a `terrainMaxPendingSnapshots` memory cap, and discard on new task, position change, `stopCompileTask` or `deleteGlResources`. Capture failures fall back per section, and snapshots are disabled after 16 failures. | No custom priority queue: vanilla's nearest-first queueing order is kept. Over-budget sections use vanilla's live-reading region cache. |
+| Block meshing semantics | Connected (vanilla) | Vanilla/Forge `rebuildChunk` and `BlockRendererDispatcher` do the meshing: baked models, `ISmartBlockModel`, fluids, AO and lightmap coordinates, biome tint, `canRenderInLayer`, tile-entity collection, the visibility graph and translucent quad sorting. | Identical output to vanilla is expected but has not been verified. |
+| Section visibility | Partial | Vanilla `setupTerrain` frustum and cave-culling BFS are unchanged. On top of that, `TerrainVisibilityFilter` drops a section layer when the rendered-block bounds of its compiled result (plus a 1-block margin) are outside the left/right/top/bottom planes taken from the GL matrices at `ChunkRenderContainer.initialize`. Near/far planes are ignored. It draws when it is unsure. | No GPU occlusion queries and no custom visibility graph. Plane capture assumes `setupTerrain` runs under the camera matrices (static reading of `EntityRenderer.renderWorldPass`). |
+| Legacy overlay (`terrainMode=overlay`) | Disabled by default | The previous `RenderWorldLastEvent` overlay (`ChunkMeshManager`, `BlockFaceMesher`). Its meshers now use `FloatArrayList` instead of boxed `List<Float>`. | Still draws after vanilla and can duplicate terrain. Synchronous, approximate lighting and translucency. Kept only for comparison. |
+| Block entities | Partial, opt-in | `BlockEntityDistanceCulling` wraps the exact vanilla chest, ender chest, sign, skull and banner renderers in `TileEntityRendererDispatcher.mapSpecialRenderers` (`field_147559_m`). Only in-world block entities of those exact classes beyond `blockEntityCullingDistance` are skipped. Uninstall restores the originals. | Modded block entities, beacons and item-form renders are untouched. No batching. |
+| Entities | Partial, opt-in | `RenderLivingEvent.Pre` distance culling for conservative vanilla living entities. Package eligibility checks are now cached per class. | Non-living entities are not covered. No batching or instancing. |
+| Dropped items | Partial, opt-in | Adjusts `EntityItem.renderDistanceWeight`, restored on world change or disable. | No item-model caching or batching. |
+| Particles | Partial, opt-in | Raises the particle-setting floor and restores it afterwards. | No per-particle culling or batching. |
+| Fonts, name tags, GUI/HUD, glint | Not implemented | - | No safe cache with complete invalidation was implemented in this pass. |
+| Weather | Partial, opt-in | `OptimizedWeatherRenderer` (installed only when the provider has no weather renderer) now caches biome rain/snow type and precipitation height per column. The cache rebuilds at most once per world tick or when the camera column window moves, instead of twice per frame. It uses a `WeakReference` to the world. | Vanilla visuals are approximated. Immediate-mode drawing, no VBO. |
+| Clouds | Partial, opt-in | Flat translucent grid, only when vanilla clouds are off and there is no custom sky renderer. It now runs regardless of terrain mode. | Not vanilla clouds. |
+| Framebuffer effect | Disabled by default | Composites only the legacy overlay pass. Not used in integrated mode. | Not a whole-scene post-process. |
+| FeatherOpt | Static review only | See below. | Runtime unverified. |
+| OptiFine | Precaution | Integrated terrain does not install when OptiFine classes are present, because OptiFine replaces `RenderGlobal`/`RenderChunk` internals. Its source was not inspected. | - |
+| Build configuration | Corrected statically | `minecraft.version` changed from `1.8.9-11.15.1.2318` to `1.8.9-11.15.1.2318-1.8.9`. Tracked `.gradle/` and `build/` outputs removed, and `.gitignore` added. | Not built. Gradle 2.14.1 wrapper vs. the MDK's Gradle 2.7 is untested. |
 
-- Added the missing item-culling configuration declarations referenced by `OptionalRenderHooks`; both item options remain disabled by default.
-- Removed the disconnected block-entity hook setting and reflection probe rather than presenting it as supported.
-- Restore item render-distance values when switching client worlds.
-- Keep a previous mesh until its replacement is built successfully. If an experimental rebuild throws a runtime exception, discard that chunk's custom overlay, log the failure, and defer retry for 20 client ticks so vanilla terrain remains visible.
-- Only queue loaded chunks, prioritize nearby dirty chunks, and prune pending/retry entries outside the active radius plus one chunk.
-- Dispose meshes after block-atlas restitch so stored UVs are rebuilt for the new atlas.
-- Restore VBO bindings and client vertex-array state around upload/draw calls; include texture/current-color state in the renderer's state stack.
-- Interpolate the camera position for the late-pass transform and remove the second translation from `ChunkMeshManager`.
-- Capture Forge 1.8.9 camera planes before the overlay transform and test full chunk bounds against them; retain a radius-only fail-open path.
+## Build coordinate finding
 
-These changes improve the safety and lifecycle of the opt-in overlay. They do not turn it into a replacement chunk renderer.
+`https://maven.minecraftforge.net/net/minecraftforge/forge/maven-metadata.xml` lists `1.8.9-11.15.1.2318-1.8.9`. It has no `1.8.9-11.15.1.2318` entry: all later 1.8.9 builds carry the `-1.8.9` branch suffix, and only the older 1722/1761 builds do not. The official MDK zip for that version (`forge-1.8.9-11.15.1.2318-1.8.9-mdk.zip`) uses `version = "1.8.9-11.15.1.2318-1.8.9"` with ForgeGradle `2.1-SNAPSHOT` and `mappings = "stable_20"`. `de.oceanlabs.mcp:mcp_stable:22-1.8.9` also exists, so `stable_22` was kept. These are metadata findings only; Gradle was not run.
 
-## Upstream review and reuse
+## Upstream review and licensing
 
-- Argentum describes itself as an Ornithe 1.8.9 client mod built on Celeritas. Its source uses Mixin extensions to replace renderer entry points, section build tasks, cloned chunk data, and separate render systems. Its README states that Argentum is All Rights Reserved while its bundled Celeritas jar is LGPL-3.0.
-- Celeritas documents an LGPL-3.0 license and a shared rendering core with version-specific adapters. Its Forge 1.12.2 path uses a `WorldSlice`/cloned block-access context and chunk build tasks. That API and runtime architecture do not match standard Forge 1.8.9.
-- FeatherOpt targets Forge 1.8.9 through an FML core plugin, LaunchWrapper/Mixin bootstrap, access transformer, and mixin configuration. Its inspected mixins include `RenderGlobal.setupTerrain` and block-model/render helpers. Its repository includes LGPL-2.1 text.
-- No upstream implementation code was copied into this revision. The current ArgentumForge repository has no root license file; no license was inferred for it.
-
-## Not completed
-
-A correct terrain replacement would need an integration point inside the real 1.8.9 chunk build, scheduling, and `RenderGlobal` layer draw path. Standard Forge events used here cannot cancel or replace that path. Adding a coremod/Mixin transformer would change the current packaging and introduce concrete interaction risks with FeatherOpt's `RenderGlobal` and block-model transformations; without a verified target/API and a runtime comparison, a speculative transformer would not be a safe implementation.
-
-Background building is also not implemented: current meshing reads mutable `World` and baked-model data synchronously. A worker port needs captured chunk/light/biome/model inputs, cancellation and revision checks, and render-thread-only uploads. Exact translucent sorting, vanilla ambient occlusion/lightmap behavior, modded block renderers, block-entity culling, fonts/HUD/glint, GPU occlusion, and full weather/cloud parity remain open.
-
-## Validation
-
-No Gradle command, Java compilation, unit/integration test, Minecraft launch, or runtime compatibility test was performed. Source-level review is not evidence that this code compiles or renders correctly. FeatherOpt-only and FeatherOpt-plus-OptiFine compatibility are unverified.
+- QuicksilverMC/Argentum README: "All Rights Reserved"; its bundled Celeritas jar is LGPL-3.0. Used only as a technical reference. No code copied.
+- GTNewHorizons/Celeritas: LGPL-3.0 (`COPYING`, `COPYING.LESSER`). No code copied.
+- FeatherMC/FeatherOpt: `LICENSE` is LGPL-2.1, plus an LGPL-3.0 text under `src/main/resources/LICENSE`. No code copied, bundled or depended on.
+- The ArgentumForge repository still has no license file, and none is inferred.
 
 ## FeatherOpt compatibility review (static only)
 
-- ArgentumForge and FeatherOpt remain separate and independently optional artifacts.
-- FeatherOpt detection is runtime-only; there is no bundled FeatherOpt source or required dependency.
-- Source review reported no confirmed overlapping transformation that by itself requires disabling all ArgentumForge rendering features.
-- `disableExperimentalRendererWithFeatherOpt` defaults to false and, when enabled, is intended to suppress only the experimental terrain overlay and its mesh rebuild tick.
-- `disableOptionalEffectsWithFeatherOpt` also defaults to false. The effect pipeline is not disabled merely because FeatherOpt is present.
-- These are source-level decisions, not verified runtime compatibility. No build, compilation or Minecraft test was performed.
+The `mixins.featheropt.json` and `mixins.featheropt.cond.json` configurations were inspected. `FeatherOptMixinPlugin.shouldApplyMixin` returns true and `getMixins` adds only the conditional list.
+
+- None of the registered mixins target `RenderChunk`, `ChunkRenderContainer`, `VboRenderList`, `RenderList`, `IRenderChunkFactory`, `RegionRenderCache` or `TileEntityRendererDispatcher`. `MixinRenderGlobal_*` classes exist in the source tree but are not listed in either config.
+- `inline.MixinChunkCache_AvoidCopying` redirects `EnumFacing.values()` inside `ChunkCache.getLightForExt`. Snapshot-backed caches override `getCombinedLight`, so that redirect is simply not reached for those builds. Over-budget sections still use vanilla `ChunkCache` with FeatherOpt's redirect.
+- `inline.MixinBlockModelRenderer_AvoidCopying` and the Forge model-pipeline mixins still apply, because meshing still uses those classes.
+- ArgentumForge does not disable itself when FeatherOpt is present. `disableExperimentalRendererWithFeatherOpt` (default false) turns off only the terrain path, and `disableOptionalEffectsWithFeatherOpt` only the overlay framebuffer effect.
+- This review does not prove runtime compatibility.
+
+## Not completed
+
+- Measured frame-time benefit, visual parity and compatibility: these need a real client.
+- GPU occlusion culling, and a custom section graph or priority scheduler.
+- Font/text/name-tag/HUD/glint caching, item-model caching or batching, particle culling or batching, entity batching.
+- A VBO-cached weather or cloud renderer at vanilla parity.
