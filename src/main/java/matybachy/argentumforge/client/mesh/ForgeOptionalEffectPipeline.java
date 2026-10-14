@@ -9,6 +9,7 @@ import org.lwjgl.opengl.GL11;
 
 public final class ForgeOptionalEffectPipeline implements OptionalEffectPipeline {
     private Framebuffer effectBuffer;
+    private Framebuffer mainBuffer;
     private int bufferWidth = -1;
     private int bufferHeight = -1;
     private boolean active;
@@ -28,14 +29,15 @@ public final class ForgeOptionalEffectPipeline implements OptionalEffectPipeline
     public void begin() {
         if (!isSupported()) return;
         Minecraft mc = Minecraft.getMinecraft();
-        if (mc == null) return;
-        if (!ensureBuffer(mc)) return;
+        if (mc == null || !ensureBuffer(mc)) return;
         try {
+            mainBuffer = mc.getFramebuffer();
             effectBuffer.bindFramebuffer(true);
             effectBuffer.framebufferClear();
             active = true;
         } catch (Throwable ignored) {
             active = false;
+            restoreMainBuffer();
             disableDueToFailure();
         }
     }
@@ -43,25 +45,27 @@ public final class ForgeOptionalEffectPipeline implements OptionalEffectPipeline
     @Override
     public void end() {
         if (!active) return;
+        active = false;
         if (!isOnClientThread()) {
-            active = false;
-            disabledByFailure = true;
+            restoreMainBuffer();
+            disableDueToFailure();
             return;
         }
+
         Minecraft mc = Minecraft.getMinecraft();
-        active = false;
-        if (mc == null || effectBuffer == null) return;
+        if (mc == null || effectBuffer == null) {
+            restoreMainBuffer();
+            return;
+        }
+
         boolean depthWasEnabled = GL11.glIsEnabled(GL11.GL_DEPTH_TEST);
         boolean alphaWasEnabled = GL11.glIsEnabled(GL11.GL_ALPHA_TEST);
-        Framebuffer main = mc.getFramebuffer();
         try {
-            if (main != null) {
-                main.bindFramebuffer(true);
-            }
+            restoreMainBuffer();
             GL11.glDisable(GL11.GL_ALPHA_TEST);
             GL11.glDisable(GL11.GL_DEPTH_TEST);
             GL11.glDepthMask(false);
-            float alpha = ArgentumConfig.optionalEffectsCompositeAlpha / 100.0f;
+            float alpha = RenderOptimizationMath.clampedPercent(ArgentumConfig.optionalEffectsCompositeAlpha) / 100.0f;
             float tintR = RenderOptimizationMath.clampedPercent(ArgentumConfig.optionalEffectsTintRed) / 100.0f;
             float tintG = RenderOptimizationMath.clampedPercent(ArgentumConfig.optionalEffectsTintGreen) / 100.0f;
             float tintB = RenderOptimizationMath.clampedPercent(ArgentumConfig.optionalEffectsTintBlue) / 100.0f;
@@ -70,9 +74,7 @@ public final class ForgeOptionalEffectPipeline implements OptionalEffectPipeline
         } catch (Throwable ignored) {
             disableDueToFailure();
         } finally {
-            if (main != null) {
-                main.bindFramebuffer(true);
-            }
+            restoreMainBuffer();
             GL11.glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
             GL11.glDepthMask(true);
             if (depthWasEnabled) GL11.glEnable(GL11.GL_DEPTH_TEST);
@@ -82,11 +84,23 @@ public final class ForgeOptionalEffectPipeline implements OptionalEffectPipeline
         }
     }
 
+    private void restoreMainBuffer() {
+        try {
+            if (mainBuffer != null) mainBuffer.bindFramebuffer(true);
+        } catch (Throwable ignored) {
+        } finally {
+            mainBuffer = null;
+        }
+    }
+
     private boolean ensureBuffer(Minecraft mc) {
         int width = Math.max(1, mc.displayWidth);
         int height = Math.max(1, mc.displayHeight);
         if (effectBuffer != null && (bufferWidth != width || bufferHeight != height)) {
-            effectBuffer.deleteFramebuffer();
+            try {
+                effectBuffer.deleteFramebuffer();
+            } catch (Throwable ignored) {
+            }
             effectBuffer = null;
             bufferWidth = -1;
             bufferHeight = -1;
@@ -107,8 +121,12 @@ public final class ForgeOptionalEffectPipeline implements OptionalEffectPipeline
 
     private void disableDueToFailure() {
         disabledByFailure = true;
+        restoreMainBuffer();
         if (effectBuffer != null) {
-            effectBuffer.deleteFramebuffer();
+            try {
+                effectBuffer.deleteFramebuffer();
+            } catch (Throwable ignored) {
+            }
             effectBuffer = null;
         }
         bufferWidth = -1;
