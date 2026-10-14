@@ -1,5 +1,6 @@
 package matybachy.argentumforge;
 
+import matybachy.argentumforge.client.compat.CompatibilityEnvironment;
 import net.minecraftforge.common.config.Configuration;
 import net.minecraftforge.fml.common.event.FMLPreInitializationEvent;
 
@@ -15,12 +16,11 @@ public final class ArgentumConfig {
     public static boolean enableTransparency = true;
     public static boolean enableModelFallback = true;
     public static boolean enableOptionalEffects = false;
+    public static boolean disableOptionalEffectsWithFeatherOpt = true;
     public static boolean enableEntityHooks = false;
     public static boolean enableEntityDistanceCulling = false;
     public static int entityCullingDistance = 96;
     public static boolean enableItemHooks = false;
-    public static boolean enableItemDistanceCulling = false;
-    public static int itemCullingDistance = 64;
     public static boolean enableParticleHooks = false;
     public static int particleThrottleSetting = 1;
     public static boolean enableWeatherHooks = false;
@@ -28,7 +28,6 @@ public final class ArgentumConfig {
     public static boolean enableCloudRenderer = false;
     public static int cloudRenderRadiusBlocks = 128;
     public static boolean enableBlockEntityHooks = false;
-    public static boolean enableBlockEntityDistanceCulling = false;
     public static int optionalEffectsCompositeAlpha = 100;
 
     private ArgentumConfig() {
@@ -44,12 +43,11 @@ public final class ArgentumConfig {
             enableLightingAo = cfg.getBoolean("enableLightingAo", CAT_FEATURES, true, "Enable world-light based brightness and lightweight ambient occlusion.");
             enableTransparency = cfg.getBoolean("enableTransparency", CAT_FEATURES, true, "Enable cutout/translucent split and fluid translucency.");
             enableOptionalEffects = cfg.getBoolean("enableOptionalEffects", CAT_FEATURES, false, "Enable optional post/effect pipeline when supported.");
+            disableOptionalEffectsWithFeatherOpt = cfg.getBoolean("disableOptionalEffectsWithFeatherOpt", CAT_FEATURES, true, "Keep the optional framebuffer effect disabled when FeatherOpt is present unless compatibility is verified.");
             enableEntityHooks = cfg.getBoolean("enableEntityHooks", CAT_FEATURES, false, "Enable optional entity/item hooks with vanilla fallback.");
             enableEntityDistanceCulling = cfg.getBoolean("enableEntityDistanceCulling", CAT_FEATURES, false, "Enable opt-in distance culling for living-entity renders.");
             entityCullingDistance = cfg.getInt("entityCullingDistance", CAT_FEATURES, 96, 16, 512, "Maximum render distance in blocks when entity distance culling is enabled.");
-            enableItemHooks = cfg.getBoolean("enableItemHooks", CAT_FEATURES, false, "Enable optional item-render optimization hooks with vanilla fallback.");
-            enableItemDistanceCulling = cfg.getBoolean("enableItemDistanceCulling", CAT_FEATURES, false, "Enable opt-in dropped-item distance culling while preserving vanilla item rendering for visible items.");
-            itemCullingDistance = cfg.getInt("itemCullingDistance", CAT_FEATURES, 64, 16, 256, "Maximum render distance in blocks when dropped-item distance culling is enabled.");
+            enableItemHooks = cfg.getBoolean("enableItemHooks", CAT_FEATURES, false, "Enable optional item-render optimization hooks (fallback-only in this build).");
             enableParticleHooks = cfg.getBoolean("enableParticleHooks", CAT_FEATURES, false, "Enable optional particle throttling hooks with vanilla fallback.");
             particleThrottleSetting = cfg.getInt("particleThrottleSetting", CAT_FEATURES, 1, 0, 2, "Particle quality floor when particle throttling is enabled (0=all, 1=decreased, 2=minimal).");
             enableWeatherHooks = cfg.getBoolean("enableWeatherHooks", CAT_FEATURES, false, "Enable optional rain/snow hooks with vanilla fallback.");
@@ -57,11 +55,15 @@ public final class ArgentumConfig {
             enableCloudRenderer = cfg.getBoolean("enableCloudRenderer", CAT_FEATURES, false, "Enable conservative cloud layer renderer when vanilla clouds are disabled.");
             cloudRenderRadiusBlocks = cfg.getInt("cloudRenderRadiusBlocks", CAT_FEATURES, 128, 32, 512, "Radius in blocks for the conservative optional cloud layer renderer.");
             enableBlockEntityHooks = cfg.getBoolean("enableBlockEntityHooks", CAT_FEATURES, false, "Enable optional block-entity optimization hooks (fallback-only in this build).");
-            enableBlockEntityDistanceCulling = cfg.getBoolean("enableBlockEntityDistanceCulling", CAT_FEATURES, false, "Enable block-entity distance culling only when a safe Forge hook is available; otherwise vanilla fallback is preserved.");
             optionalEffectsCompositeAlpha = cfg.getInt("optionalEffectsCompositeAlpha", CAT_FEATURES, 100, 25, 100, "Composite alpha percentage for optional framebuffer post-effects.");
             enableModelFallback = cfg.getBoolean("enableModelFallback", CAT_FALLBACKS, true, "Enable conservative block-bounds fallback when model data is missing.");
         } finally {
             if (cfg.hasChanged()) cfg.save();
         }
+    }
+
+    public static boolean shouldUseOptionalEffects() {
+        return enableOptionalEffects
+                && !(disableOptionalEffectsWithFeatherOpt && CompatibilityEnvironment.isFeatherOptPresent());
     }
 }

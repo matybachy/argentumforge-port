@@ -9,6 +9,7 @@ import org.lwjgl.opengl.GL11;
 
 public final class ForgeOptionalEffectPipeline implements OptionalEffectPipeline {
     private Framebuffer effectBuffer;
+    private Framebuffer mainBuffer;
     private int bufferWidth = -1;
     private int bufferHeight = -1;
     private boolean active;
@@ -17,7 +18,7 @@ public final class ForgeOptionalEffectPipeline implements OptionalEffectPipeline
     @Override
     public boolean isSupported() {
         return RenderOptimizationMath.shouldRunOptionalEffects(
-                ArgentumConfig.enableOptionalEffects,
+                ArgentumConfig.shouldUseOptionalEffects(),
                 OpenGlHelper.isFramebufferEnabled(),
                 disabledByFailure,
                 isOnClientThread()
@@ -31,11 +32,13 @@ public final class ForgeOptionalEffectPipeline implements OptionalEffectPipeline
         if (mc == null) return;
         if (!ensureBuffer(mc)) return;
         try {
+            mainBuffer = mc.getFramebuffer();
             effectBuffer.bindFramebuffer(true);
             effectBuffer.framebufferClear();
             active = true;
         } catch (Throwable ignored) {
             active = false;
+            restoreMainBuffer();
             disableDueToFailure();
         }
     }
@@ -43,19 +46,19 @@ public final class ForgeOptionalEffectPipeline implements OptionalEffectPipeline
     @Override
     public void end() {
         if (!active) return;
+        active = false;
         if (!isOnClientThread()) {
-            active = false;
-            disabledByFailure = true;
+            restoreMainBuffer();
+            disableDueToFailure();
             return;
         }
         Minecraft mc = Minecraft.getMinecraft();
-        active = false;
-        if (mc == null || effectBuffer == null) return;
+        if (mc == null || effectBuffer == null) {
+            restoreMainBuffer();
+            return;
+        }
         try {
-            Framebuffer main = mc.getFramebuffer();
-            if (main != null) {
-                main.bindFramebuffer(true);
-            }
+            restoreMainBuffer();
             GL11.glDisable(GL11.GL_ALPHA_TEST);
             GL11.glDisable(GL11.GL_DEPTH_TEST);
             GL11.glDepthMask(false);
@@ -65,10 +68,21 @@ public final class ForgeOptionalEffectPipeline implements OptionalEffectPipeline
         } catch (Throwable ignored) {
             disableDueToFailure();
         } finally {
+            restoreMainBuffer();
             GL11.glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
             GL11.glDepthMask(true);
             GL11.glEnable(GL11.GL_DEPTH_TEST);
             GL11.glEnable(GL11.GL_ALPHA_TEST);
+        }
+    }
+
+    private void restoreMainBuffer() {
+        try {
+            if (mainBuffer != null) mainBuffer.bindFramebuffer(true);
+        } catch (Throwable ignored) {
+            // The outer renderer still restores its GL attribute stack.
+        } finally {
+            mainBuffer = null;
         }
     }
 
@@ -97,8 +111,12 @@ public final class ForgeOptionalEffectPipeline implements OptionalEffectPipeline
 
     private void disableDueToFailure() {
         disabledByFailure = true;
+        restoreMainBuffer();
         if (effectBuffer != null) {
-            effectBuffer.deleteFramebuffer();
+            try {
+                effectBuffer.deleteFramebuffer();
+            } catch (Throwable ignored) {
+            }
             effectBuffer = null;
         }
         bufferWidth = -1;

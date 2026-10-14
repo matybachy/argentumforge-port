@@ -1,62 +1,35 @@
 # PORTING_STATUS
 
 ## Summary
-This repository currently contains an experimental Forge 1.8.9 mod project with a coherent chunk-terrain renderer path and explicit vanilla fallbacks. It is intentionally not yet full Argentum parity.
+This repository contains an experimental Forge 1.8.9 renderer with explicit vanilla fallbacks. It is not full upstream Argentum parity.
+
+## Current compatibility changes
+- `ArgentumRenderer` now uses unconditional cleanup for matrices, GL attributes, optional hooks, and the optional framebuffer pipeline.
+- The optional framebuffer pipeline now records and restores the main framebuffer, cleans up after allocation/composite failures, and remains disabled by default.
+- FeatherOpt is detected without a hard class-linkage dependency. Optional framebuffer effects are disabled by default when FeatherOpt is present because the installed client artifact and runtime interaction are not available for verification.
+- No FeatherOpt source is vendored or modified.
 
 ## Feature matrix
-- Project skeleton: Implemented
-- Forge 1.8.9 build path: Implemented
-- Java 8 compatibility: Implemented
-- Client render hook: Implemented
-- Basic VBO wrapper: Implemented
-- Chunk-mesh prototype: Implemented
-- Block-face mesher with fallback models: Implemented
-- Baked-model quad terrain meshing for vanilla blockstate models: Implemented (with fallback when unavailable)
-- Rebuild queue with priority + per-tick budget: Implemented (distance-prioritized and radius-filtered candidates)
-- Correct opaque/cutout/translucent layering: Implemented
-- Texture atlas / UV mapping (with missing-sprite fallback): Implemented
-- Terrain fallback path: Implemented (state-aware block bounds first, then collision/selection AABB, then conservative cross/box)
-- Texture fallback path: Partial (state/model/default-state lookup before missing sprite; no fragile name guessing)
-- Lighting and AO (lightweight): Implemented (conservative per-vertex approximation with emissive full-bright fallback and corner-neighbor AO sampling)
-- Chunk visibility and frustum culling: Implemented (radius + conservative directional backface culling)
-- Chunk/world/block invalidation hooks: Implemented (chunk load/unload, block place/break, multiplace, and chunk-edge spillover)
-- Chunk VBO lifecycle/reuse: Implemented (persistent VBOs with in-place subdata uploads when capacity allows)
-- Entity hooks: Implemented (opt-in living-entity distance culling with compatibility guards and vanilla fallback default)
-- Particle hooks: Implemented (opt-in particle throttling floor with automatic restore fallback)
-- Cloud hooks: Implemented (opt-in conservative cloud layer renderer; only when vanilla clouds are disabled and no custom sky renderer is active)
-- Optional post-effect pipeline: Implemented (capability-gated LWJGL2 framebuffer composite with self-disable fallback)
-- Item hooks: Implemented (opt-in dropped-item distance culling via conservative render-distance weight adjustment with vanilla renderer fallback)
-- Block-entity hooks: Implemented (compatibility-gated fallback path; optimization remains blocked when Forge 1.8.9 TESR pre-render hooks are unavailable)
-- Weather hooks: Implemented (fallback-only compatibility toggle; no custom rain/snow renderer in this pass)
-- Configuration/settings: Implemented (Forge config, disabled by default)
-- Compatibility modules: Implemented (texture/lighting/GPU/effects interfaces)
-- Deterministic pure-Java helper tests: Implemented (`MeshMathTest`)
-- Entity optimization: Partial (living-entity distance culling only, with conservative compatibility checks; disabled by default)
-- Item optimization: Partial (dropped-item distance culling by distance-weight reduction; vanilla item renderer preserved)
-- Particle optimization: Partial (particle setting throttle only; no particle-system rewrite)
-- Cloud optimization: Partial (conservative optional cloud layer; not full vanilla cloud parity)
-- Weather optimization: Fallback-only (no safe rain/snow replacement path wired in this pass)
-- Block-entity optimization: Blocked/fallback-only (Forge 1.8.9 lacks a safe generic TESR pre-render hook; vanilla TESR rendering preserved)
-- Post-processing pipeline: Partial (framebuffer composite path only; no shader chain in Forge 1.8.9 baseline; disabled on unsupported capability/thread/runtime-failure)
-- Full upstream parity: Blocked by target-platform differences and rendering abstraction gaps
+- Forge 1.8.9 build path: Implemented in source; build requires ForgeGradle dependency access.
+- Java 8 compatibility: Implemented in source.
+- Terrain/model/fluid/VBO paths: Implemented as conservative prototype paths with vanilla fallback.
+- Entity distance culling: Partial, opt-in, and guarded for named/leashed/mounted entities.
+- Particle throttling: Partial, opt-in, with restoration behavior.
+- Cloud renderer: Partial, opt-in, disabled when vanilla clouds or custom sky renderers are active.
+- Item rendering optimization: Fallback-only.
+- Block-entity optimization: Fallback-only.
+- Weather replacement: Fallback-only on `main`; vanilla weather is preserved.
+- Optional post-processing: Partial, capability/thread gated, FeatherOpt-conservative, self-disabling on failure.
+- FeatherOpt compatibility: Source-level defensive fix implemented; affected runtime white-screen fix remains unverified without Feather/Dawn client logs and an installed FeatherOpt runtime.
 
-## Build results
-- Current status: blocked in this execution environment by DNS resolution failure for the ForgeGradle Maven host while resolving `net.minecraftforge.gradle:ForgeGradle:2.1-SNAPSHOT`.
-- Command: gradle clean build --stacktrace --no-daemon
-- Result: FAILED during configuration with `UnknownHostException: maven.minecraftforge.net` before Java compilation could start.
-- Expected output: build/libs/*.jar (on network-enabled environment with ForgeGradle access)
+## FeatherOpt investigation
+Upstream FeatherOpt uses ForgeGradle 2.1 for Forge 1.8.9, SpongePowered Mixin, a `FeatherCoreMod` FML core plugin, `mixins.featheropt.json`, an access transformer, and Mixin launch configuration. ArgentumForge does not currently declare a coremod, Mixin config, or FeatherOpt dependency. Therefore no direct overlapping injection was found in this repository. The remaining risk is runtime OpenGL/framebuffer interaction with the installed FeatherOpt artifact, which cannot be proven from source alone.
 
-## Runtime notes
-- The experimental render path is toggled with `ArgentumForge.ENABLE_EXPERIMENTAL_CHUNK_RENDERER` and can be disabled to preserve vanilla behavior.
-- The config default leaves the experimental renderer disabled.
-- Terrain path uses model/atlas/light fallbacks to stay buildable on Forge 1.8.9.
-- Unsupported/failed model decoding falls back to state-aware bounds/collision-shape/cross/fluid geometry instead of dropping terrain faces.
-- Fluid meshing now suppresses same-material internal faces (including flowing/still variants), uses Forge-style falling-level normalization, and renders visible bottom faces.
+## Validation status
+- Deterministic pure-Java helper tests: source updated; execution must be performed in a Java/Gradle environment.
+- `gradle clean build --stacktrace --no-daemon`: not run in this direct repository-edit session.
+- Runtime Forge-only validation: not available here.
+- FeatherOpt enabled / OptiFine disabled validation: not available here.
+- FeatherOpt plus OptiFine validation: not available here.
 
-## Remaining blockers
-- Upstream Argentum code relies on rendering subsystems and platform abstractions absent from standard Forge 1.8.9.
-- Direct porting would require substantial reimplementation or compatibility shims.
-- Full parity requires iterative, feature-by-feature porting and runtime validation in a real Minecraft client session.
-- Exact vanilla translucent ordering and full vanilla AO parity remain partial and require additional runtime comparison/tuning.
-- Runtime Minecraft visual/performance verification remains unverified in this environment due ForgeGradle host resolution failure.
-- Build/test execution in this environment remains blocked by ForgeGradle dependency resolution (`files.minecraftforge.net` DNS failure).
+Do not claim the white-screen issue is confirmed fixed until the affected Feather/Dawn configuration has been launched and logs/screenshots compared with and without ArgentumForge.
