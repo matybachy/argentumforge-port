@@ -1,0 +1,16 @@
+[
+{
+  "modid": "argentumforge",
+  "name": "Argentum Forge Port",
+  "description": "Private experimental Forge 1.8.9 port of Argentum rendering ideas: snapshot-based terrain section compiler, block entity, entity, particle and font optimizations. Not an official Argentum or Celeritas release.",
+  "version": "${version}",
+  "mcversion": "${mcversion}",
+  "url": "",
+  "updateUrl": "",
+  "authorList": ["matybachy"],
+  "credits": "Based on the ideas of Argentum by rdh and Celeritas/Embeddium/Sodium by embeddedt, JellySquid, IMS212 and contributors. No upstream code is copied.",
+  "logoFile": "",
+  "screenshots": [],
+  "dependencies": []
+}
+]

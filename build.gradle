@@ -1,0 +1,108 @@
+buildscript {
+    repositories {
+        maven {
+            name = "forge"
+            url = "https://maven.minecraftforge.net"
+        }
+        maven {
+            name = "sponge"
+            url = "https://repo.spongepowered.org/maven"
+        }
+        mavenCentral()
+    }
+    dependencies {
+        classpath 'net.minecraftforge.gradle:ForgeGradle:2.1-SNAPSHOT'
+        classpath 'org.spongepowered:mixingradle:0.6-SNAPSHOT'
+    }
+}
+
+apply plugin: 'net.minecraftforge.gradle.forge'
+apply plugin: 'org.spongepowered.mixin'
+
+version = project.mod_version
+group = project.mod_group
+archivesBaseName = project.mod_id
+
+sourceCompatibility = targetCompatibility = '1.8'
+compileJava {
+    sourceCompatibility = targetCompatibility = '1.8'
+}
+tasks.withType(JavaCompile) {
+    options.encoding = 'UTF-8'
+}
+
+minecraft {
+    version = project.forge_version
+    runDir = "run"
+    mappings = project.mappings
+    makeObfSourceJar = false
+    clientJvmArgs += "-Dfml.coreMods.load=matybachy.argentumforge.core.ArgentumForgeLoadingPlugin"
+    clientRunArgs += ["--tweakClass", "org.spongepowered.asm.launch.MixinTweaker"]
+    clientRunArgs += ["--mixin", "mixins.argentumforge.json"]
+    // ./gradlew runClient -PsmokeTest : creates a world, enables every feature, checks it, screenshots and quits.
+    if (project.hasProperty('smokeTest')) {
+        clientJvmArgs += "-Dargentumforge.smokeTest=true"
+    }
+}
+
+repositories {
+    maven {
+        name = "sponge"
+        url = "https://repo.spongepowered.org/maven"
+    }
+    mavenCentral()
+}
+
+configurations {
+    embed
+    compile.extendsFrom embed
+}
+
+dependencies {
+    embed('org.spongepowered:mixin:0.7.11-SNAPSHOT') {
+        exclude module: 'launchwrapper'
+        exclude module: 'guava'
+        exclude module: 'gson'
+        exclude module: 'commons-io'
+        exclude module: 'log4j-core'
+    }
+    testCompile 'junit:junit:4.12'
+}
+
+mixin {
+    defaultObfuscationEnv searge
+    add sourceSets.main, "mixins.argentumforge.refmap.json"
+}
+
+jar {
+    from(configurations.embed.collect { it.isDirectory() ? it : zipTree(it) }) {
+        exclude 'META-INF/*.SF'
+        exclude 'META-INF/*.DSA'
+        exclude 'META-INF/*.RSA'
+        exclude 'META-INF/MANIFEST.MF'
+    }
+    manifest {
+        attributes([
+            'FMLCorePlugin': 'matybachy.argentumforge.core.ArgentumForgeLoadingPlugin',
+            'FMLCorePluginContainsFMLMod': 'true',
+            'ForceLoadAsMod': 'true',
+            'TweakClass': 'org.spongepowered.asm.launch.MixinTweaker',
+            'TweakOrder': '0',
+            'MixinConfigs': 'mixins.argentumforge.json'
+        ])
+    }
+}
+
+processResources {
+    inputs.property "version", project.version
+    inputs.property "mcversion", project.minecraft.version
+
+    from(sourceSets.main.resources.srcDirs) {
+        include 'mcmod.info'
+        expand 'version': project.version, 'mcversion': project.minecraft.version
+    }
+
+    from(sourceSets.main.resources.srcDirs) {
+        exclude 'mcmod.info'
+    }
+}

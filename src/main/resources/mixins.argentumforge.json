@@ -1,0 +1,12 @@
+{
+  "required": true,
+  "minVersion": "0.7.3",
+  "package": "matybachy.argentumforge.mixin",
+  "refmap": "mixins.argentumforge.refmap.json",
+  "compatibilityLevel": "JAVA_8",
+  "verbose": true,
+  "client": [
+    "EffectRendererMixin",
+    "FontRendererMixin"
+  ]
+}
