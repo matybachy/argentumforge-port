@@ -26,6 +26,9 @@ final class ArgentumOtherPage extends ArgentumSettingsScreen {
         addConfigOption(ConfigOption.of("disableExperimentalRendererWithFeatherOpt"));
         addConfigOption(ConfigOption.overlayOnly("disableOptionalEffectsWithFeatherOpt"));
         addConfigOption(ConfigOption.of("disableExperimentalRendererWithDawn"));
+        addConfigOption(ConfigOption.reload("allowIntegratedTerrainWithOptiFine"));
+        addConfigOption(ConfigOption.of("enableWeatherHooksWithOptiFine"));
+        addConfigOption(ConfigOption.of("enableCloudHooksWithOptiFine"));
         addWideButton(RESET_ID, "argentumforge.video.reset");
     }
 

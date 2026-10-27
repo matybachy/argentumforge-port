@@ -56,6 +56,9 @@ public final class ArgentumConfig {
     public static boolean enableWeatherHooksWithDawn = false;
     public static boolean debugSnapshotBounds = false;
     public static boolean replaceVideoSettingsScreen = true;
+    public static boolean allowIntegratedTerrainWithOptiFine = false;
+    public static boolean enableWeatherHooksWithOptiFine = false;
+    public static boolean enableCloudHooksWithOptiFine = false;
 
     private static Configuration config;
 
@@ -85,7 +88,8 @@ public final class ArgentumConfig {
     /**
      * Re-reads the configuration into the static fields.
      *
-     * @param applyReloadOptions false keeps the current {@code enableExperimentalRenderer} and {@code terrainMode}:
+     * @param applyReloadOptions false keeps the current {@code enableExperimentalRenderer}, {@code terrainMode} and
+     *                           {@code allowIntegratedTerrainWithOptiFine}:
      *                           the video settings screen applies those (which reload the chunk renderer) only when
      *                           it is left, not on every click
      * @param save               false leaves writing the file to the caller
@@ -95,6 +99,7 @@ public final class ArgentumConfig {
         if (cfg == null) return;
         boolean appliedRenderer = enableExperimentalRenderer;
         String appliedTerrainMode = terrainMode;
+        boolean appliedAllowWithOptiFine = allowIntegratedTerrainWithOptiFine;
         try {
             enableExperimentalRenderer = cfg.getBoolean("enableExperimentalRenderer", CAT_RENDERER, false, "Master switch for ArgentumForge rendering changes. terrainMode selects the terrain path; every optional hook below also requires this switch.");
             String mode = cfg.getString("terrainMode", CAT_RENDERER, TERRAIN_MODE_INTEGRATED,
@@ -143,9 +148,13 @@ public final class ArgentumConfig {
             removedStale |= cfg.getCategory(CAT_FEATURES).remove("enableFontWidthCache") != null;
             if (removedStale) cfg.save();
             replaceVideoSettingsScreen = cfg.getBoolean("replaceVideoSettingsScreen", CAT_GUI, true, "Replace Options > Video Settings with the ArgentumForge video settings screen (vanilla video options plus every ArgentumForge option). Works with enableExperimentalRenderer off, so the renderer can be switched on from there. Never replaces the screen when OptiFine is detected.");
+            allowIntegratedTerrainWithOptiFine = cfg.getBoolean("allowIntegratedTerrainWithOptiFine", CAT_RENDERER, false, "Experimental: also install the integrated terrain path when OptiFine is detected. OptiFine changes RenderGlobal and RenderChunk, which the integrated path subclasses; untested. Try with OptiFine's Render Regions, Fast Render and shaders off.");
+            enableWeatherHooksWithOptiFine = cfg.getBoolean("enableWeatherHooksWithOptiFine", CAT_FEATURES, false, "Also install the optional weather renderer when OptiFine is detected. Off by default: the provider weather renderer skips the body of EntityRenderer.renderRainSnow, where OptiFine applies its Rain & Snow setting.");
+            enableCloudHooksWithOptiFine = cfg.getBoolean("enableCloudHooksWithOptiFine", CAT_FEATURES, false, "Also draw the optional cloud layer when OptiFine is detected. Off by default: OptiFine has its own Clouds setting, so the layer could appear while OptiFine clouds are off.");
             if (!applyReloadOptions) {
                 enableExperimentalRenderer = appliedRenderer;
                 terrainMode = appliedTerrainMode;
+                allowIntegratedTerrainWithOptiFine = appliedAllowWithOptiFine;
             }
             ArgentumForge.ENABLE_EXPERIMENTAL_CHUNK_RENDERER = enableExperimentalRenderer;
             ArgentumForge.MESH_MANAGER.setEnabled(enableExperimentalRenderer && isOverlayTerrainMode());

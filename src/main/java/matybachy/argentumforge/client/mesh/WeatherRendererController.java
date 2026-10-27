@@ -15,9 +15,11 @@ public final class WeatherRendererController {
     public void onClientTick() {
         WorldClient world = mc != null ? mc.theWorld : null;
         // A provider weather renderer makes Forge return before the vanilla body of EntityRenderer.renderRainSnow,
-        // which is where Dawn hooks its weather options; so with Dawn present this stays off unless opted in.
+        // which is where Dawn hooks its weather options and OptiFine applies Rain & Snow; so with either present this
+        // stays off unless opted in.
         if (!ArgentumForge.ENABLE_EXPERIMENTAL_CHUNK_RENDERER || !ArgentumConfig.enableWeatherHooks || world == null || world.provider == null
-                || (CompatibilityEnvironment.isDawnPresent() && !ArgentumConfig.enableWeatherHooksWithDawn)) {
+                || (CompatibilityEnvironment.isDawnPresent() && !ArgentumConfig.enableWeatherHooksWithDawn)
+                || (CompatibilityEnvironment.isOptiFinePresent() && !ArgentumConfig.enableWeatherHooksWithOptiFine)) {
             uninstallOptimizedRenderer();
             return;
         }

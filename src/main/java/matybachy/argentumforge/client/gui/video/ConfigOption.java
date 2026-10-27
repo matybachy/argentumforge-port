@@ -13,7 +13,10 @@ final class ConfigOption {
     enum Kind { TOGGLE, CYCLE, SLIDER }
 
     final String key;
-    /** Changes the chunk renderer: applied only when the video settings are left, and labelled "(reload)". */
+    /**
+     * Changes the chunk renderer: applied only when the video settings are left, and labelled "(reload)". Must match
+     * the fields {@code ArgentumConfig.sync(false, ...)} keeps.
+     */
     final boolean reload;
     /** Used only by the legacy overlay terrain path: disabled while terrainMode is integrated. */
     final boolean overlayOnly;

@@ -1,14 +1,16 @@
 package matybachy.argentumforge.client.gui.video;
 
+import matybachy.argentumforge.client.compat.CompatibilityEnvironment;
 import net.minecraft.client.gui.GuiButton;
 import net.minecraft.client.gui.GuiScreen;
 import net.minecraft.client.renderer.OpenGlHelper;
 import net.minecraft.client.settings.GameSettings;
 
 /**
- * Replacement for Options > Video Settings: the vanilla video options most players use, the two ArgentumForge options
+ * Replacement for Options > Video Settings: the vanilla video options most players use, the ArgentumForge options
  * that change the terrain path, and links to six pages that hold every other ArgentumForge option. Installed by
- * {@code ClientProxy} from {@code GuiOpenEvent}; see {@code ArgentumConfig.replaceVideoSettingsScreen}.
+ * {@code ClientProxy} from {@code GuiOpenEvent}; see {@code ArgentumConfig.replaceVideoSettingsScreen}. With OptiFine
+ * the screen is not replaced; its "ArgentumForge..." button opens {@link #optionsOnly}, without the vanilla options.
  */
 public final class ArgentumVideoSettingsGui extends ArgentumSettingsScreen {
     private static final int EFFECTS_ID = 101;
@@ -18,12 +20,40 @@ public final class ArgentumVideoSettingsGui extends ArgentumSettingsScreen {
     private static final int PARTICLES_ID = 105;
     private static final int OTHER_ID = 106;
 
+    private final boolean vanillaOptions;
+
     public ArgentumVideoSettingsGui(GuiScreen parent) {
-        super(parent, "options.videoTitle");
+        this(parent, "options.videoTitle", true);
+    }
+
+    private ArgentumVideoSettingsGui(GuiScreen parent, String titleKey, boolean vanillaOptions) {
+        super(parent, titleKey);
+        this.vanillaOptions = vanillaOptions;
+    }
+
+    /** ArgentumForge options only, for OptiFine's video settings screen, which shows the vanilla options itself. */
+    public static ArgentumVideoSettingsGui optionsOnly(GuiScreen parent) {
+        return new ArgentumVideoSettingsGui(parent, "argentumforge.video.title.main", false);
     }
 
     @Override
     protected void addControls() {
+        if (vanillaOptions) addVanillaOptions();
+        addConfigOption(ConfigOption.reload("enableExperimentalRenderer"));
+        addConfigOption(ConfigOption.reload("terrainMode"));
+        if (CompatibilityEnvironment.isOptiFinePresent()) {
+            addConfigOption(ConfigOption.reload("allowIntegratedTerrainWithOptiFine"));
+        }
+        endRow();
+        addPageButton(EFFECTS_ID, "argentumforge.video.page.effects");
+        addPageButton(TERRAIN_ID, "argentumforge.video.page.terrain");
+        addPageButton(DETAILS_ID, "argentumforge.video.page.details");
+        addPageButton(PERFORMANCE_ID, "argentumforge.video.page.performance");
+        addPageButton(PARTICLES_ID, "argentumforge.video.page.particles");
+        addPageButton(OTHER_ID, "argentumforge.video.page.other");
+    }
+
+    private void addVanillaOptions() {
         addVanillaOption(GameSettings.Options.GRAPHICS);
         addVanillaOption(GameSettings.Options.RENDER_DISTANCE);
         addVanillaOption(GameSettings.Options.AMBIENT_OCCLUSION);
@@ -33,15 +63,6 @@ public final class ArgentumVideoSettingsGui extends ArgentumSettingsScreen {
         addVanillaOption(GameSettings.Options.GAMMA);
         // The vanilla screen hides this option when the driver has no VBO support.
         if (OpenGlHelper.vboSupported) addVanillaOption(GameSettings.Options.USE_VBO);
-        addConfigOption(ConfigOption.reload("enableExperimentalRenderer"));
-        addConfigOption(ConfigOption.reload("terrainMode"));
-        endRow();
-        addPageButton(EFFECTS_ID, "argentumforge.video.page.effects");
-        addPageButton(TERRAIN_ID, "argentumforge.video.page.terrain");
-        addPageButton(DETAILS_ID, "argentumforge.video.page.details");
-        addPageButton(PERFORMANCE_ID, "argentumforge.video.page.performance");
-        addPageButton(PARTICLES_ID, "argentumforge.video.page.particles");
-        addPageButton(OTHER_ID, "argentumforge.video.page.other");
     }
 
     @Override

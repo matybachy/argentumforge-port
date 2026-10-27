@@ -7,14 +7,17 @@ import matybachy.argentumforge.client.compat.CompatibilityEnvironment;
 import matybachy.argentumforge.client.entity.NonLivingEntityCulling;
 import matybachy.argentumforge.client.gui.ArgentumConfigScreen;
 import matybachy.argentumforge.client.gui.video.ArgentumVideoSettingsGui;
+import matybachy.argentumforge.client.gui.video.OptiFineMenuButton;
 import matybachy.argentumforge.client.mesh.ClientWorldHooks;
 import matybachy.argentumforge.client.mesh.ChunkMeshManager;
 import matybachy.argentumforge.client.mesh.RendererValidation;
 import matybachy.argentumforge.client.terrain.IntegratedTerrain;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.GuiButton;
 import net.minecraft.client.gui.GuiVideoSettings;
 import net.minecraft.client.settings.KeyBinding;
 import net.minecraftforge.client.event.GuiOpenEvent;
+import net.minecraftforge.client.event.GuiScreenEvent;
 import net.minecraftforge.client.event.RenderGameOverlayEvent;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.world.WorldEvent;
@@ -58,11 +61,14 @@ public class ClientProxy extends CommonProxy {
         // "mixins.argentumforge.json" or "FontRendererMixin", an older ArgentumForge jar is installed.
         LOGGER.info("Active parts: mixins=none, enableExperimentalRenderer={}, enableEntityHooks={}, enableItemHooks={}, "
                         + "enableBlockEntityHooks={}, enableParticleHooks={}, enableWeatherHooks={}, enableCloudHooks={}, "
-                        + "enableOptionalEffects={}, replaceVideoSettingsScreen={}; detected: OptiFine={}, Dawn={}, FeatherOpt={}",
+                        + "enableOptionalEffects={}, replaceVideoSettingsScreen={}, allowIntegratedTerrainWithOptiFine={}, "
+                        + "enableWeatherHooksWithOptiFine={}, enableCloudHooksWithOptiFine={}; detected: OptiFine={}, Dawn={}, FeatherOpt={}",
                 ArgentumConfig.enableExperimentalRenderer, ArgentumConfig.enableEntityHooks, ArgentumConfig.enableItemHooks,
                 ArgentumConfig.enableBlockEntityHooks, ArgentumConfig.enableParticleHooks, ArgentumConfig.enableWeatherHooks,
                 ArgentumConfig.enableCloudHooks, ArgentumConfig.enableOptionalEffects,
                 ArgentumConfig.replaceVideoSettingsScreen && !CompatibilityEnvironment.isOptiFinePresent(),
+                ArgentumConfig.allowIntegratedTerrainWithOptiFine, ArgentumConfig.enableWeatherHooksWithOptiFine,
+                ArgentumConfig.enableCloudHooksWithOptiFine,
                 CompatibilityEnvironment.isOptiFinePresent(), CompatibilityEnvironment.isDawnPresent(),
                 CompatibilityEnvironment.isFeatherOptPresent());
     }
@@ -131,6 +137,20 @@ public class ClientProxy extends CommonProxy {
         if (event.gui == null || event.gui.getClass() != GuiVideoSettings.class) return;
         if (!ArgentumConfig.replaceVideoSettingsScreen || CompatibilityEnvironment.isOptiFinePresent()) return;
         event.gui = new ArgentumVideoSettingsGui(Minecraft.getMinecraft().currentScreen);
+    }
+
+    /**
+     * With OptiFine, Options > Video Settings is OptiFine's screen (same class, patched in place) and is not replaced:
+     * add an "ArgentumForge..." button in its free top-left corner instead.
+     */
+    @SubscribeEvent
+    public void onInitGui(GuiScreenEvent.InitGuiEvent.Post event) {
+        if (event.gui == null || event.gui.getClass() != GuiVideoSettings.class) return;
+        if (!CompatibilityEnvironment.isOptiFinePresent() || event.buttonList == null) return;
+        for (GuiButton button : event.buttonList) {
+            if (button.id == OptiFineMenuButton.ID) return;
+        }
+        event.buttonList.add(new OptiFineMenuButton(event.gui));
     }
 
     public ChunkMeshManager getMeshManager() {

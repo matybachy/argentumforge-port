@@ -2,6 +2,7 @@ package matybachy.argentumforge.client.mesh;
 
 import matybachy.argentumforge.ArgentumConfig;
 import matybachy.argentumforge.ArgentumForge;
+import matybachy.argentumforge.client.compat.CompatibilityEnvironment;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.WorldClient;
 import net.minecraft.entity.Entity;
@@ -230,6 +231,8 @@ public final class OptionalRenderHooks {
 
     private boolean canUseCloudFallbackRenderer() {
         if (mc == null || mc.theWorld == null || mc.gameSettings == null) return false;
+        // OptiFine keeps its own Clouds setting; vanilla's clouds value alone does not say whether clouds are wanted.
+        if (CompatibilityEnvironment.isOptiFinePresent() && !ArgentumConfig.enableCloudHooksWithOptiFine) return false;
         return RenderOptimizationMath.shouldRunCloudFallback(
                 mc.gameSettings.clouds,
                 ArgentumConfig.enableCloudHooks,

@@ -20,6 +20,7 @@ Experimental Forge 1.8.9 port of Argentum rendering ideas, built as a separate m
 - Optional cloud layer renderer, active only when vanilla clouds are off and there is no custom sky renderer
 - Optional weather approximation with per-tick cached biome/precipitation columns (rain or snow pass skipped when no column needs it), distance and forward filtering, and provider fallback
 - Optional framebuffer composite/tint pass, applied only to the legacy overlay pass
+- With OptiFine (which Dawn Client needs): integrated terrain, weather and cloud hooks stay off unless `allowIntegratedTerrainWithOptiFine`, `enableWeatherHooksWithOptiFine` or `enableCloudHooksWithOptiFine` is on; OptiFine's Video Settings gets an "ArgentumForge..." button (Forge event, no Mixin). Untested
 - Video settings screen (replaces Options > Video Settings, Forge `GuiOpenEvent`, no Mixin): vanilla video options plus every ArgentumForge option on six pages, layout modelled on OptiFine's menu; off with `replaceVideoSettingsScreen=false`, never shown with OptiFine. Untested
 - In-game settings screen: Mods list -> ArgentumForge -> Config, or the "Open ArgentumForge settings" key (unbound by default in Controls). Changes apply without a restart
 - FeatherOpt, OptiFine and Dawn Client detected at runtime without class linkage (memoized); F3 shows what was detected. Dawn is never disabled; see `PORTING_STATUS.md` for the Dawn review and risks
@@ -64,6 +65,7 @@ The generated Forge config controls renderer behavior:
 - Dawn Client: `disableExperimentalRendererWithDawn` (terrain path only), `enableWeatherHooksWithDawn`
 - Debug: `debugSnapshotBounds` (logs terrain snapshot reads outside the captured region)
 - GUI: `replaceVideoSettingsScreen` (category `gui`)
+- OptiFine: `allowIntegratedTerrainWithOptiFine` (experimental), `enableWeatherHooksWithOptiFine`, `enableCloudHooksWithOptiFine`
 - Clouds: `enableCloudHooks`, `enableCloudRenderer`, `cloudRenderRadiusBlocks`
 - Weather: `enableWeatherHooks`, `weatherRenderRadiusBlocks`, `weatherFrustumMinDotPercent`
 
