@@ -2,6 +2,7 @@ package matybachy.argentumforge;
 
 import matybachy.argentumforge.client.compat.CompatibilityEnvironment;
 import net.minecraftforge.common.config.Configuration;
+import net.minecraftforge.common.config.Property;
 import net.minecraftforge.fml.common.event.FMLPreInitializationEvent;
 
 import java.io.File;
@@ -10,6 +11,7 @@ public final class ArgentumConfig {
     public static final String CAT_RENDERER = "renderer";
     public static final String CAT_FEATURES = "features";
     public static final String CAT_FALLBACKS = "fallbacks";
+    public static final String CAT_GUI = "gui";
 
     public static final String TERRAIN_MODE_INTEGRATED = "integrated";
     public static final String TERRAIN_MODE_OVERLAY = "overlay";
@@ -53,6 +55,7 @@ public final class ArgentumConfig {
     public static boolean disableExperimentalRendererWithDawn = false;
     public static boolean enableWeatherHooksWithDawn = false;
     public static boolean debugSnapshotBounds = false;
+    public static boolean replaceVideoSettingsScreen = true;
 
     private static Configuration config;
 
@@ -76,8 +79,22 @@ public final class ArgentumConfig {
 
     /** Re-reads every value from the backing configuration (after load and after the config screen saves). */
     public static void sync() {
+        sync(true, true);
+    }
+
+    /**
+     * Re-reads the configuration into the static fields.
+     *
+     * @param applyReloadOptions false keeps the current {@code enableExperimentalRenderer} and {@code terrainMode}:
+     *                           the video settings screen applies those (which reload the chunk renderer) only when
+     *                           it is left, not on every click
+     * @param save               false leaves writing the file to the caller
+     */
+    public static void sync(boolean applyReloadOptions, boolean save) {
         Configuration cfg = config;
         if (cfg == null) return;
+        boolean appliedRenderer = enableExperimentalRenderer;
+        String appliedTerrainMode = terrainMode;
         try {
             enableExperimentalRenderer = cfg.getBoolean("enableExperimentalRenderer", CAT_RENDERER, false, "Master switch for ArgentumForge rendering changes. terrainMode selects the terrain path; every optional hook below also requires this switch.");
             String mode = cfg.getString("terrainMode", CAT_RENDERER, TERRAIN_MODE_INTEGRATED,
@@ -125,10 +142,26 @@ public final class ArgentumConfig {
             boolean removedStale = cfg.getCategory(CAT_FEATURES).remove("enableParticleCulling") != null;
             removedStale |= cfg.getCategory(CAT_FEATURES).remove("enableFontWidthCache") != null;
             if (removedStale) cfg.save();
+            replaceVideoSettingsScreen = cfg.getBoolean("replaceVideoSettingsScreen", CAT_GUI, true, "Replace Options > Video Settings with the ArgentumForge video settings screen (vanilla video options plus every ArgentumForge option). Works with enableExperimentalRenderer off, so the renderer can be switched on from there. Never replaces the screen when OptiFine is detected.");
+            if (!applyReloadOptions) {
+                enableExperimentalRenderer = appliedRenderer;
+                terrainMode = appliedTerrainMode;
+            }
             ArgentumForge.ENABLE_EXPERIMENTAL_CHUNK_RENDERER = enableExperimentalRenderer;
             ArgentumForge.MESH_MANAGER.setEnabled(enableExperimentalRenderer && isOverlayTerrainMode());
         } finally {
-            if (cfg.hasChanged()) cfg.save();
+            if (save && cfg.hasChanged()) cfg.save();
+        }
+    }
+
+    /** Resets every property of every category to its default value. The caller saves and syncs. */
+    public static void resetToDefaults() {
+        Configuration cfg = config;
+        if (cfg == null) return;
+        for (String category : cfg.getCategoryNames()) {
+            for (Property property : cfg.getCategory(category).values()) {
+                property.setToDefault();
+            }
         }
     }
 

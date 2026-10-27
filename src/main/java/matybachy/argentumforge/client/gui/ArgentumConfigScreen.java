@@ -30,6 +30,7 @@ public final class ArgentumConfigScreen extends GuiConfig {
         list.add(new ConfigElement(cfg.getCategory(ArgentumConfig.CAT_RENDERER)));
         list.add(new ConfigElement(cfg.getCategory(ArgentumConfig.CAT_FEATURES)));
         list.add(new ConfigElement(cfg.getCategory(ArgentumConfig.CAT_FALLBACKS)));
+        list.add(new ConfigElement(cfg.getCategory(ArgentumConfig.CAT_GUI)));
         return list;
     }
 }
