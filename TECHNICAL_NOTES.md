@@ -10,7 +10,8 @@
   - `RenderGameOverlayEvent.Text`: F3 counters (terrain, particles)
   - `ConfigChangedEvent.OnConfigChangedEvent`: saves the file and calls `ArgentumConfig.sync()`
 - `@Mod(guiFactory = ArgentumGuiFactory)` gives the mod list a Config button that opens `ArgentumConfigScreen`.
-- Mixin: the jar manifest names `org.spongepowered.asm.launch.MixinTweaker` (`TweakClass`), `mixins.argentumforge.json` (`MixinConfigs`), `ArgentumForgeLoadingPlugin` (`FMLCorePlugin`, transforms nothing) and `ForceLoadAsMod`, so the `@Mod` class in the same jar still loads. In dev, `runClient` passes `--tweakClass` and `--mixin` and `-Dfml.coreMods.load`; there the jar is on the classpath, and `ArgentumForgeLoadingPlugin.injectData` takes it back off FML's ignored and reparseable lists (deobfuscated environment only), because FML skips reparseable coremods on the classpath.
+- No Mixin, coremod, tweaker, access transformer or `IClassTransformer`: only Forge events and reflection. The Mixin build is on the local `mixin-variant` branch.
+- `CompatibilityEnvironment` detects FeatherOpt, OptiFine and Dawn (`Loader.isModLoaded("dawn")` or `net.digitalingot.feather.launch.tweaker.FeatherTweaker`), memoized.
 - No access transformer or hand-written `IClassTransformer` exists.
 
 ## Integrated terrain path (`terrainMode=integrated`)
@@ -79,9 +80,8 @@ About 50 KB per snapshot. Pending snapshots are limited by `terrainMaxPendingSna
 - **Living entities:** `RenderLivingEvent.Pre` distance culling, limited to vanilla entity and renderer packages. Unnamed, unmounted and unleashed only. The package checks are cached in `IdentityHashMap`s.
 - **Non-living entities:** `NonLivingEntityCulling.onClientTick` installs or removes `DistanceCulledEntityRenderer` wrappers in `RenderManager.entityRenderMap` (`field_78729_o`), but only where the current value is the exact vanilla `RenderArrow`, `RenderXPOrb` or `RenderSnowball` class. `shouldRender` returns the delegate's answer AND-ed with a distance check against the camera position that `RenderGlobal.renderEntities` passes in. Exact entity class only; named, riding and ridden entities are always drawn. Reflection failures disable the feature and leave the vanilla renderers in place.
 - **Items:** `EntityItem.renderDistanceWeight` adjustment, restored on world change or disable.
-- **Particles:** the particle-setting floor is restored when disabled. `EffectRendererMixin` injects at the head of `renderParticles` (`ParticleCulling.begin` reads the current matrices into a private `ClippingHelperImpl`, so the shared instance used by vanilla frustums is untouched) and redirects the `EntityFX.renderParticle` call to skip particles whose bounding box, grown by 2 blocks, is outside the frustum. Only classes in `net.minecraft.client.particle` are culled; `renderLitParticles` (layer 3) is not touched.
-- **Fonts:** `FontRendererMixin` adds a `FontWidthCache` field to every `FontRenderer`. `getStringWidth` returns the cached value at HEAD and stores the result at RETURN, but only for the exact `FontRenderer` class. The cache is cleared at the end of `onResourceManagerReload` and when `setUnicodeFlag` changes the flag; it holds at most 4096 strings of up to 256 characters and clears itself when full.
-- **Weather:** `WorldProvider.setWeatherRenderer` is used only when the provider has none. `WeatherColumnCache` keeps type and precipitation height per column for one world tick and camera window. The world is held weakly. The cache counts rain and snow columns, and a pass with none is skipped.
+- **Particles:** the particle-setting floor is restored when disabled.
+- **Weather:** `WorldProvider.setWeatherRenderer` is used only when the provider has none, and with Dawn present only if `enableWeatherHooksWithDawn` is on. Forward and side vectors come from `GL_MODELVIEW_MATRIX` (camera, not entity rotation), so freelook and the third-person front view are handled; directional filtering is off above about 60 degrees of pitch. `WeatherColumnCache` keeps type and precipitation height per column for one world tick and camera window. The world is held weakly. The cache counts rain and snow columns, and a pass with none is skipped.
 - **Clouds:** flat grid from `RenderWorldLastEvent`, only when vanilla clouds are off and there is no sky renderer.
 
 ## Removed code
@@ -95,6 +95,11 @@ About 50 KB per snapshot. Pending snapshots are limited by `terrainMaxPendingSna
 - **OptiFine:** integrated terrain is not installed when `optifine.OptiFineForgeTweaker` or `optifine.Config` is present.
 
 ## Validation record
+
+Current (Mixin-free) revision: `./gradlew clean build --stacktrace --no-daemon` passes with 15 JUnit tests. It was not run in Minecraft.
+
+The record below is from the earlier Mixin build (now on `mixin-variant`); the terrain, block-entity and restore results apply to code that is unchanged here, but they were not re-run.
+
 
 Run on Windows 11, JDK 8, NVIDIA RTX 5060 Ti, Forge `1.8.9-11.15.1.2318-1.8.9` dev client:
 

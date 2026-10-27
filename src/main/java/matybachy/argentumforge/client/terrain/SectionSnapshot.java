@@ -242,6 +242,15 @@ final class SectionSnapshot {
                 && z >= minZ && z < minZ + SIZE;
     }
 
+    /** Captured region bounds, regardless of whether the section stored arrays (empty sections store none). */
+    boolean inRegion(int x, int y, int z) {
+        return x >= minX && x < minX + SIZE && y >= minY && y < minY + SIZE && z >= minZ && z < minZ + SIZE;
+    }
+
+    String describeRegion() {
+        return "[" + minX + "," + minY + "," + minZ + " .. " + (minX + SIZE - 1) + "," + (minY + SIZE - 1) + "," + (minZ + SIZE - 1) + "]";
+    }
+
     boolean containsColumn(int x, int z) {
         return biomes != null && x >= minX && x < minX + SIZE && z >= minZ && z < minZ + SIZE;
     }
@@ -265,6 +274,11 @@ final class SectionSnapshot {
     }
 
     private int index(int x, int y, int z) {
+        // Callers check contains() first; an index outside the region would silently read a neighbouring row.
+        if (TerrainDebug.isEnabled() && !inRegion(x, y, z)) {
+            TerrainDebug.reportOutOfRegion("snapshot index", x, y, z, this);
+            throw new IndexOutOfBoundsException("Snapshot index outside " + describeRegion() + ": " + x + "," + y + "," + z);
+        }
         return ((y - minY) * SIZE + (z - minZ)) * SIZE + (x - minX);
     }
 }

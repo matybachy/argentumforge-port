@@ -7,18 +7,25 @@ import net.minecraft.entity.Entity;
 import net.minecraft.util.BlockPos;
 import net.minecraft.util.MathHelper;
 import net.minecraft.util.ResourceLocation;
-import net.minecraft.util.Vec3;
 import net.minecraft.world.biome.BiomeGenBase;
 import net.minecraftforge.client.IRenderHandler;
+import org.lwjgl.BufferUtils;
 import org.lwjgl.opengl.GL11;
 
 import java.lang.ref.WeakReference;
+import java.nio.FloatBuffer;
+
 
 public final class OptimizedWeatherRenderer extends IRenderHandler {
     private static final ResourceLocation RAIN_TEXTURE = new ResourceLocation("textures/environment/rain.png");
     private static final ResourceLocation SNOW_TEXTURE = new ResourceLocation("textures/environment/snow.png");
     private static final double NEAR_DISTANCE_SQ = 24.0D * 24.0D;
+    /** Below this horizontal length of the view vector (about 60 degrees pitch) directional filtering is off. */
+    private static final double MIN_HORIZONTAL_LOOK = 0.5D;
     private final WeatherColumnCache columns = new WeatherColumnCache();
+    private final FloatBuffer modelview = BufferUtils.createFloatBuffer(16);
+    /** lookX, lookZ (normalized horizontal view direction), sideX, sideZ, directional (1 or 0). */
+    private final double[] cameraBasis = new double[5];
     private boolean disabledByFailure;
 
     @Override
@@ -40,24 +47,21 @@ public final class OptimizedWeatherRenderer extends IRenderHandler {
         double cameraY = view.lastTickPosY + (view.posY - view.lastTickPosY) * partialTicks;
         double cameraZ = view.lastTickPosZ + (view.posZ - view.lastTickPosZ) * partialTicks;
 
-        Vec3 look = view.getLook(partialTicks);
-        double lookX = look != null ? look.xCoord : 0.0D;
-        double lookZ = look != null ? look.zCoord : 0.0D;
-        double lookLen = Math.sqrt(lookX * lookX + lookZ * lookZ);
-        if (lookLen > 1.0E-6D) {
-            lookX /= lookLen;
-            lookZ /= lookLen;
-        } else {
-            lookX = 0.0D;
-            lookZ = 1.0D;
-        }
-
-        double sideX = -lookZ;
-        double sideZ = lookX;
+        // View direction from the camera matrix, not from the entity's rotation: freelook (for example Dawn's),
+        // third-person front view and other camera mods rotate the camera without turning the entity.
+        if (!readCameraBasis()) return;
+        double lookX = cameraBasis[0];
+        double lookZ = cameraBasis[1];
+        double sideX = cameraBasis[2];
+        double sideZ = cameraBasis[3];
+        boolean directional = cameraBasis[4] > 0.0D;
         int radius = Math.max(32, ArgentumConfig.weatherRenderRadiusBlocks);
         int radiusCeil = (int) Math.ceil(radius);
         double maxDistanceSq = RenderOptimizationMath.weatherMaxDistanceSq(radius);
-        double minForwardDot = Math.max(-1.0D, Math.min(1.0D, ArgentumConfig.weatherFrustumMinDotPercent / 100.0D));
+        // Looking steeply up or down, columns in every horizontal direction are on screen: no directional filter.
+        double minForwardDot = directional
+                ? Math.max(-1.0D, Math.min(1.0D, ArgentumConfig.weatherFrustumMinDotPercent / 100.0D))
+                : -1.0D;
         int minY = MathHelper.floor_double(cameraY) - 10;
         int maxY = MathHelper.floor_double(cameraY) + 10;
         int minX = MathHelper.floor_double(cameraX) - radiusCeil;
@@ -101,6 +105,39 @@ public final class OptimizedWeatherRenderer extends IRenderHandler {
             if (attribPushed) GL11.glPopAttrib();
             if (lightmapEnabled) mc.entityRenderer.disableLightmap();
         }
+    }
+
+    /**
+     * Reads the horizontal view and side directions from GL_MODELVIEW_MATRIX, which holds the camera rotation while
+     * EntityRenderer.renderRainSnow calls the weather renderer. World-space view direction is minus the third row of
+     * the rotation part; the camera's right axis is its first row. Returns false when the matrix is unusable.
+     */
+    private boolean readCameraBasis() {
+        modelview.clear();
+        try {
+            GL11.glGetFloat(GL11.GL_MODELVIEW_MATRIX, modelview);
+        } catch (RuntimeException e) {
+            return false;
+        }
+        double forwardX = -modelview.get(2);
+        double forwardZ = -modelview.get(10);
+        double rightX = modelview.get(0);
+        double rightZ = modelview.get(8);
+        double forwardLength = Math.sqrt(forwardX * forwardX + forwardZ * forwardZ);
+        double rightLength = Math.sqrt(rightX * rightX + rightZ * rightZ);
+        if (Double.isNaN(forwardLength) || Double.isNaN(rightLength) || !(rightLength > 1.0E-6D)) return false;
+        cameraBasis[2] = rightX / rightLength;
+        cameraBasis[3] = rightZ / rightLength;
+        if (forwardLength > 1.0E-6D) {
+            cameraBasis[0] = forwardX / forwardLength;
+            cameraBasis[1] = forwardZ / forwardLength;
+        } else {
+            // Straight up or down: the side axis is still valid; the forward direction only matters when directional.
+            cameraBasis[0] = -cameraBasis[3];
+            cameraBasis[1] = cameraBasis[2];
+        }
+        cameraBasis[4] = forwardLength >= MIN_HORIZONTAL_LOOK ? 1.0D : 0.0D;
+        return true;
     }
 
     private void drawPass(Minecraft mc,

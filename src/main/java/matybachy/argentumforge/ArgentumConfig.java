@@ -50,8 +50,9 @@ public final class ArgentumConfig {
     public static int optionalEffectsTintRed = 100;
     public static int optionalEffectsTintGreen = 100;
     public static int optionalEffectsTintBlue = 100;
-    public static boolean enableParticleCulling = true;
-    public static boolean enableFontWidthCache = true;
+    public static boolean disableExperimentalRendererWithDawn = false;
+    public static boolean enableWeatherHooksWithDawn = false;
+    public static boolean debugSnapshotBounds = false;
 
     private static Configuration config;
 
@@ -117,8 +118,13 @@ public final class ArgentumConfig {
             optionalEffectsTintGreen = cfg.getInt("optionalEffectsTintGreen", CAT_FEATURES, 100, 0, 100, "Green channel multiplier percent for optional framebuffer post-effects.");
             optionalEffectsTintBlue = cfg.getInt("optionalEffectsTintBlue", CAT_FEATURES, 100, 0, 100, "Blue channel multiplier percent for optional framebuffer post-effects.");
             enableModelFallback = cfg.getBoolean("enableModelFallback", CAT_FALLBACKS, true, "Enable conservative block-bounds fallback when model data is missing.");
-            enableParticleCulling = cfg.getBoolean("enableParticleCulling", CAT_FEATURES, true, "Skip particles whose bounds are outside the camera frustum (requires enableParticleHooks). Particles that draw themselves (pickup, large explosion and modded custom-layer particles) are never skipped.");
-            enableFontWidthCache = cfg.getBoolean("enableFontWidthCache", CAT_FEATURES, true, "Cache FontRenderer.getStringWidth results per font. The cache is cleared on resource reload and when the unicode or bidi flag changes. Works independently of enableExperimentalRenderer.");
+            disableExperimentalRendererWithDawn = cfg.getBoolean("disableExperimentalRendererWithDawn", CAT_RENDERER, false, "Optionally disable only the terrain path (integrated compiler or legacy overlay) when Dawn Client is present; unrelated optional hooks remain controlled by their own settings. Dawn itself is never disabled.");
+            enableWeatherHooksWithDawn = cfg.getBoolean("enableWeatherHooksWithDawn", CAT_FEATURES, false, "Also install the optional weather renderer when Dawn Client is present. Off by default: the provider weather renderer replaces the vanilla body of EntityRenderer.renderRainSnow, where Dawn applies its own weather settings.");
+            debugSnapshotBounds = cfg.getBoolean("debugSnapshotBounds", CAT_FALLBACKS, false, "Debug: check every terrain snapshot index against the captured region and log the first reads that fall outside it (with a stack trace). Use when another mod clamps out-of-range RegionRenderCache reads, which would otherwise hide them. Costs some performance.");
+            // Options of the removed Mixin build (see the mixin-variant branch); drop them from existing files.
+            boolean removedStale = cfg.getCategory(CAT_FEATURES).remove("enableParticleCulling") != null;
+            removedStale |= cfg.getCategory(CAT_FEATURES).remove("enableFontWidthCache") != null;
+            if (removedStale) cfg.save();
             ArgentumForge.ENABLE_EXPERIMENTAL_CHUNK_RENDERER = enableExperimentalRenderer;
             ArgentumForge.MESH_MANAGER.setEnabled(enableExperimentalRenderer && isOverlayTerrainMode());
         } finally {
@@ -135,8 +141,8 @@ public final class ArgentumConfig {
     }
 
     public static boolean isExperimentalRendererDisabledByCompatibility() {
-        return disableExperimentalRendererWithFeatherOpt
-                && CompatibilityEnvironment.isFeatherOptPresent();
+        return (disableExperimentalRendererWithFeatherOpt && CompatibilityEnvironment.isFeatherOptPresent())
+                || (disableExperimentalRendererWithDawn && CompatibilityEnvironment.isDawnPresent());
     }
 
     public static boolean shouldUseOptionalEffects() {

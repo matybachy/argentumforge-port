@@ -2,7 +2,6 @@ package matybachy.argentumforge.client;
 
 import matybachy.argentumforge.ArgentumConfig;
 import matybachy.argentumforge.ArgentumForge;
-import matybachy.argentumforge.client.particle.ParticleCulling;
 import matybachy.argentumforge.client.terrain.IntegratedTerrain;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiMainMenu;
@@ -23,7 +22,7 @@ import java.util.List;
  * Development smoke test, active only with {@code -Dargentumforge.smokeTest=true}. It creates a creative world,
  * measures a vanilla phase, turns on every ArgentumForge feature in memory (the config file is not written),
  * spawns particles around the player, flips the VBO setting so both terrain variants are installed, checks that
- * each feature reports activity, saves a screenshot, turns the renderer off again, checks that vanilla objects are
+ * the terrain path reports activity, saves a screenshot, turns the renderer off again, checks that vanilla objects are
  * restored and quits. FPS figures are logged for reference only; they are not a controlled benchmark.
  * Results are logged with the prefix {@code [SmokeTest]}; the last line is PASS or FAIL.
  */
@@ -111,10 +110,8 @@ public final class SmokeTest {
         ArgentumConfig.enableBlockEntityHooks = true;
         ArgentumConfig.enableBlockEntityDistanceCulling = true;
         ArgentumConfig.enableParticleHooks = true;
-        ArgentumConfig.enableParticleCulling = true;
         ArgentumConfig.enableWeatherHooks = true;
         ArgentumConfig.enableCloudHooks = true;
-        ArgentumConfig.enableFontWidthCache = true;
         mc.theWorld.getWorldInfo().setRaining(true);
         LOGGER.info("[SmokeTest] all features enabled");
     }
@@ -134,7 +131,6 @@ public final class SmokeTest {
         List<String> failures = new ArrayList<String>();
         List<String> debug = new ArrayList<String>();
         IntegratedTerrain.appendDebugLines(debug);
-        ParticleCulling.appendDebugLines(debug);
         for (String line : debug) LOGGER.info("[SmokeTest] {}", line);
 
         if (!modeInstalled[0]) failures.add("integrated terrain never installed in display-list mode");
@@ -142,12 +138,6 @@ public final class SmokeTest {
         if (debug.isEmpty() || !debug.get(0).contains("snapshot builds") || debug.get(0).contains("snapshot builds 0,")) {
             failures.add("no snapshot-backed section builds");
         }
-        boolean particlesCulled = false;
-        for (String line : debug) {
-            if (line.contains("particles culled") && !line.endsWith(" 0 total")) particlesCulled = true;
-        }
-        if (!particlesCulled) failures.add("no particles culled");
-        checkFontCache(failures);
 
         LOGGER.info("[SmokeTest] average FPS (reference only) vanilla={} display-list={} vbo={}",
                 average(vanillaFpsSum, vanillaSamples), average(modeFpsSum[0], modeSamples[0]),
@@ -181,20 +171,6 @@ public final class SmokeTest {
         if (mc.gameSettings.useVbo != originalVbo) {
             mc.gameSettings.useVbo = originalVbo;
             mc.renderGlobal.loadRenderers();
-        }
-    }
-
-    private void checkFontCache(List<String> failures) {
-        String[] samples = {"Hello world", "§lBold§r text", "§cRed §lbold", "", "Ünïcödé ✓", "a§"};
-        for (String sample : samples) {
-            ArgentumConfig.enableFontWidthCache = false;
-            int reference = mc.fontRendererObj.getStringWidth(sample);
-            ArgentumConfig.enableFontWidthCache = true;
-            int first = mc.fontRendererObj.getStringWidth(sample);
-            int cached = mc.fontRendererObj.getStringWidth(sample);
-            if (reference != first || reference != cached) {
-                failures.add("font width mismatch for '" + sample + "': " + reference + "/" + first + "/" + cached);
-            }
         }
     }
 }

@@ -31,14 +31,14 @@ final class SnapshotRegionRenderCache extends RegionRenderCache {
         int z = pos.getZ();
         if (y < 0 || y >= 256) return Blocks.air.getDefaultState();
         if (snapshot.contains(x, y, z)) return snapshot.getBlockState(x, y, z);
-        TerrainStats.recordOutOfSnapshotRead();
+        recordFallback("getBlockState", x, y, z);
         return super.getBlockState(pos);
     }
 
     @Override
     public TileEntity getTileEntity(BlockPos pos) {
         if (snapshot.contains(pos.getX(), pos.getY(), pos.getZ())) return snapshot.getTileEntity(pos);
-        TerrainStats.recordOutOfSnapshotRead();
+        recordFallback("getTileEntity", pos.getX(), pos.getY(), pos.getZ());
         return super.getTileEntity(pos);
     }
 
@@ -48,7 +48,7 @@ final class SnapshotRegionRenderCache extends RegionRenderCache {
         int y = pos.getY();
         int z = pos.getZ();
         if (!snapshot.contains(x - 1, y - 1, z - 1) || !snapshot.contains(x + 1, y + 1, z + 1)) {
-            TerrainStats.recordOutOfSnapshotRead();
+            recordFallback("getCombinedLight", x, y, z);
             return super.getCombinedLight(pos, lightValue);
         }
         int sky = lightForExt(EnumSkyBlock.SKY, x, y, z);
@@ -64,7 +64,7 @@ final class SnapshotRegionRenderCache extends RegionRenderCache {
         int z = pos.getZ();
         if (y < 0 || y >= 256) return type.defaultLightValue;
         if (snapshot.contains(x, y, z)) return snapshot.getLight(type, x, y, z);
-        TerrainStats.recordOutOfSnapshotRead();
+        recordFallback("getLightFor", x, y, z);
         return super.getLightFor(type, pos);
     }
 
@@ -76,6 +76,17 @@ final class SnapshotRegionRenderCache extends RegionRenderCache {
         }
         TerrainStats.recordOutOfSnapshotRead();
         return super.getBiomeGenForCoords(pos);
+    }
+
+    /**
+     * A read the snapshot cannot answer goes to the vanilla cache. Inside the region that is normal (empty sections
+     * store no arrays, light near the region edge); outside it, vanilla's unchecked index would be wrong.
+     */
+    private void recordFallback(String access, int x, int y, int z) {
+        if (!snapshot.inRegion(x, y, z)) {
+            TerrainStats.recordOutOfSnapshotRead();
+            if (TerrainDebug.isEnabled()) TerrainDebug.reportOutOfRegion(access, x, y, z, snapshot);
+        }
     }
 
     @Override

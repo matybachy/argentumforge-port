@@ -2,6 +2,7 @@ package matybachy.argentumforge.client.mesh;
 
 import matybachy.argentumforge.ArgentumConfig;
 import matybachy.argentumforge.ArgentumForge;
+import matybachy.argentumforge.client.compat.CompatibilityEnvironment;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.WorldClient;
 import net.minecraftforge.client.IRenderHandler;
@@ -13,7 +14,10 @@ public final class WeatherRendererController {
 
     public void onClientTick() {
         WorldClient world = mc != null ? mc.theWorld : null;
-        if (!ArgentumForge.ENABLE_EXPERIMENTAL_CHUNK_RENDERER || !ArgentumConfig.enableWeatherHooks || world == null || world.provider == null) {
+        // A provider weather renderer makes Forge return before the vanilla body of EntityRenderer.renderRainSnow,
+        // which is where Dawn hooks its weather options; so with Dawn present this stays off unless opted in.
+        if (!ArgentumForge.ENABLE_EXPERIMENTAL_CHUNK_RENDERER || !ArgentumConfig.enableWeatherHooks || world == null || world.provider == null
+                || (CompatibilityEnvironment.isDawnPresent() && !ArgentumConfig.enableWeatherHooksWithDawn)) {
             uninstallOptimizedRenderer();
             return;
         }

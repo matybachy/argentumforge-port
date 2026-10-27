@@ -3,12 +3,12 @@ package matybachy.argentumforge;
 import matybachy.argentumforge.client.ArgentumRenderer;
 import matybachy.argentumforge.client.SmokeTest;
 import matybachy.argentumforge.client.blockentity.BlockEntityDistanceCulling;
+import matybachy.argentumforge.client.compat.CompatibilityEnvironment;
 import matybachy.argentumforge.client.entity.NonLivingEntityCulling;
 import matybachy.argentumforge.client.gui.ArgentumConfigScreen;
 import matybachy.argentumforge.client.mesh.ClientWorldHooks;
 import matybachy.argentumforge.client.mesh.ChunkMeshManager;
 import matybachy.argentumforge.client.mesh.RendererValidation;
-import matybachy.argentumforge.client.particle.ParticleCulling;
 import matybachy.argentumforge.client.terrain.IntegratedTerrain;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.settings.KeyBinding;
@@ -87,8 +87,15 @@ public class ClientProxy extends CommonProxy {
     public void onDebugOverlay(RenderGameOverlayEvent.Text event) {
         Minecraft mc = Minecraft.getMinecraft();
         if (mc == null || mc.gameSettings == null || !mc.gameSettings.showDebugInfo || event.left == null) return;
+        event.left.add("[Argentum] compat: Dawn " + yesNo(CompatibilityEnvironment.isDawnPresent())
+                + ", FeatherOpt " + yesNo(CompatibilityEnvironment.isFeatherOptPresent())
+                + ", OptiFine " + yesNo(CompatibilityEnvironment.isOptiFinePresent())
+                + "; terrain " + IntegratedTerrain.describeState());
         IntegratedTerrain.appendDebugLines(event.left);
-        ParticleCulling.appendDebugLines(event.left);
+    }
+
+    private static String yesNo(boolean value) {
+        return value ? "yes" : "no";
     }
 
     @SubscribeEvent

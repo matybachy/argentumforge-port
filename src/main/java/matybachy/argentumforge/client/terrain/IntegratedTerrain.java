@@ -200,5 +200,16 @@ public final class IntegratedTerrain {
     public static void appendDebugLines(List<String> lines) {
         if (!installed) return;
         TerrainStats.appendDebugLines(lines, OUTSTANDING_SNAPSHOTS.get());
+        TerrainDebug.appendDebugLines(lines);
+    }
+
+    /** Terrain path state for the F3 compatibility line. */
+    public static String describeState() {
+        if (installed) return installedWithVbo ? "installed (VBO)" : "installed (display lists)";
+        if (!ArgentumForge.ENABLE_EXPERIMENTAL_CHUNK_RENDERER || !ArgentumConfig.isIntegratedTerrainMode()) return "off";
+        if (CompatibilityEnvironment.isOptiFinePresent()) return "off (OptiFine)";
+        if (ArgentumConfig.isExperimentalRendererDisabledByCompatibility()) return "off (compat option)";
+        if (installDisabledByFailure) return "off (install failed, see log)";
+        return "pending";
     }
 }
